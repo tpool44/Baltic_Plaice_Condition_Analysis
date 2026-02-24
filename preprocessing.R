@@ -185,10 +185,10 @@ map_data_all <- CA_meta %>%
 
 # 6. EXPORT DER RDS-DATEIEN -----------------------------------------------
 # Einzelfisch-Daten: Für Boxplots, Zeitreihen und Regressionen
-saveRDS(CA_meta, "data/plaice_app_data.rds")
+saveRDS(CA_meta, "data/plaice_individual_data.rds")
 
 # Aggregierte Daten: Für die interaktive Karte und CPUE-Korrelationen
-saveRDS(map_data_all, "data/map_data_all.rds")
+saveRDS(map_data_all, "data/plaice_haul_aggregated.rds")
 
 # Optimiertes Shapefile: Für den Hintergrund der Karte
 # Zuschneidung der Shapefile auf Untersuchungsgebiet
@@ -205,6 +205,6 @@ saveRDS(ICES_light, "data/ices_shape_light.rds")
 
 cat("--- Preprocessing am:", as.character(Sys.time()), "\n")
 cat("Dateien in 'data/' gespeichert:\n")
-cat("- plaice_app_data.rds (Einzelfische)\n")
-cat("- map_data_all.rds (Aggregiert pro Hol)\n")
+cat("- plaice_individual_data.rds (Einzelfische)\n")
+cat("- plaice_haul_aggregated.rds (Aggregiert pro Hol)\n")
 cat("- ices_shape_light.rds (Karten-Hintergrund)\n")
