@@ -58,6 +58,9 @@ plaice_counts <- HL %>%
   summarise(Total_Plaice_Count = sum(HLNoAtLngt, na.rm = TRUE), .groups = "drop")
 
 
+
+
+# 3. RÄUMLICHE ZUORDNUNG --------------------------------------------------
 # HH Datensatz bereinigen
 HH <- HH %>%
   filter(
@@ -66,8 +69,6 @@ HH <- HH %>%
     !is.na(HaulLat), !is.na(HaulLong) # Keine NAs in Koordinaten
   )
 
-
-# 3. RÄUMLICHE ZUORDNUNG --------------------------------------------------
 # Hauls aus HH extrahieren (Koordinaten, HaulDuration, Umweltdaten sichern)
 hauls_sf <- HH %>%
   # Relevante Spalten auswählen
@@ -149,20 +150,21 @@ CA_meta <- CA %>%
   mutate(Region = case_when(
     SubDivisio == "20" ~ "Skagerrak", 
     SubDivisio == "21" ~ "Kattegat",
-    SubDivisio == "22" ~ "Kieler Bucht", 
-    SubDivisio == "23" ~ "Öresund",
+    SubDivisio == "23" ~ "Öresund", # Geografisch zwischen Kattegat und Arkona
+    SubDivisio == "22" ~ "Beltsee & Kieler Bucht", 
     SubDivisio == "24" ~ "Arkona-Becken",
     SubDivisio == "25" ~ "Bornholm-Becken", 
-    SubDivisio == "26" ~ "Östlich von Bornholm", 
+    SubDivisio == "26" ~ "Südöstliche Ostsee", 
+    as.numeric(SubDivisio) > 26 ~ "Nördliche Zentrale Ostsee", # SD 27, 28, 29, 32
     TRUE ~ NA_character_
   )) %>%
-  # Geografische Sortierung (Faktor)
+  # Geografische Sortierung von West nach Ost (Faktor)
   mutate(Region = factor(Region, levels = c(
-    "Skagerrak", "Kattegat", "Öresund", "Kieler Bucht",
-    "Arkona-Becken", "Bornholm-Becken", "Östlich von Bornholm"
+    "Skagerrak", "Kattegat", "Öresund", "Beltsee & Kieler Bucht",
+    "Arkona-Becken", "Bornholm-Becken", "Südöstliche Ostsee",
+    "Nördliche Zentrale Ostsee"
   ))) %>%
   filter(!is.na(Region)) # Nur Fische aus Zielgebieten
-
 
 
 # 5. AGGREGATION FÜR KARTE & CPUE-ANALYSEN ----------------------------
@@ -185,10 +187,10 @@ map_data_all <- CA_meta %>%
 
 # 6. EXPORT DER RDS-DATEIEN -----------------------------------------------
 # Einzelfisch-Daten: Für Boxplots, Zeitreihen und Regressionen
-saveRDS(CA_meta, "data/plaice_individual_data.rds")
+saveRDS(CA_meta, "output/plaice_individual_data.rds")
 
 # Aggregierte Daten: Für die interaktive Karte und CPUE-Korrelationen
-saveRDS(map_data_all, "data/plaice_haul_aggregated.rds")
+saveRDS(map_data_all, "output/plaice_haul_aggregated.rds")
 
 # Optimiertes Shapefile: Für den Hintergrund der Karte
 # Zuschneidung der Shapefile auf Untersuchungsgebiet
@@ -201,7 +203,7 @@ ICES_light <- ICES_areas_wgs %>%
   st_crop(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max) %>%
   st_simplify(dTolerance = 0.001) 
 
-saveRDS(ICES_light, "data/ices_shape_light.rds")
+saveRDS(ICES_light, "output/ices_shape_light.rds")
 
 cat("--- Preprocessing am:", as.character(Sys.time()), "\n")
 cat("Dateien in 'data/' gespeichert:\n")
