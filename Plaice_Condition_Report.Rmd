@@ -1364,6 +1364,8 @@ Die zukünftige Entwicklung dieses Trends wird maßgeblich von der Entwicklung d
 
 ------------------------------------------------------------------------
 
+**Open Science Hinweis:** Der vollständige Analyse-Code, die Rohdaten-Verarbeitungssubroutinen sowie die hier generierten Exportdateien sind zur Sicherstellung der Reproduzierbarkeit auf GitHub hinterlegt: [github.com/dein-profil/baltic-plaice-analysis](https://www.google.com/search?q=https://github.com/dein-profil/baltic-plaice-analysis).
+
 **Interaktive Anwendung**: Um die in dieser Arbeit beschriebenen komplexen räumlichen und zeitlichen Interaktionen greifbar zu machen, wurde eine interaktive Web-Applikation entwickelt: [Baltic-Plaice-Condtion-Analysis](https://tpool44.shinyapps.io/baltic_plaice_condition_analysis/). Diese erlaubt es Anwendern, die Trends für spezifische Subdivisionen, Quartale und biologische Gruppen individuell zu justieren.
 
 **Grafik-Export**: In Ergänzung zum schriftlichen Bericht wurden alle visualisierten Analysen automatisiert im Verzeichnis `/output` hinterlegt. Dieser Export gewährleistet, dass sämtliche Abbildungen (p1–p10) in hoher Auflösung vorliegen.
