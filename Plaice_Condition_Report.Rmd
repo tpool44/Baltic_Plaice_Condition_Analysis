@@ -1,0 +1,1395 @@
+---
+title: "Dynamik des Fulton-Konditionsfaktors bei *Pleuronectes platessa* in der Ostsee: Eine räumlich-zeitliche Analyse von 1994 bis 2024"
+subtitle: "Methodische Aufbereitung und Validierung von ICES-Surveydaten"
+author: "Tom Puhlmann"
+date: "`r format(Sys.Date(), '%d. %B %Y')`"
+output: 
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: show
+    number_sections: true
+    df_print: paged
+bibliography: references.bib
+csl: apa.csl
+---
+
+```{=html}
+<style>
+/* Bildunterschriften & Tabellenüberschriften */
+.caption, caption {
+  color: #666666;
+  font-size: 0.9em;
+  font-style: italic;
+  text-align: justify;
+  hyphens: auto;
+  padding-top: 10px;
+  padding-bottom: 20px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 80%;
+}
+
+/* Zentrierung von Bildern */
+img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 100%;
+}
+
+/* Tabelle-Captions (kable) */
+caption {
+  color: #777777 !important;
+  font-size: 0.85em !important;
+  text-align: justify !important;
+}
+
+/* Tabellen-Abstände */
+.table {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+</style>
+```
+
+```{r setup, include=FALSE}
+# --- Globale Optionen ---
+knitr::opts_chunk$set(
+  echo = TRUE,           
+  warning = FALSE,       
+  message = FALSE,      
+  fig.align = "center",  
+  dpi = 300              
+)
+
+# --- Bibliotheken ---
+# Kern-Framework für Datenmanipulation und Visualisierung
+library(tidyverse) # Lädt dplyr, ggplot2, tidyr, readr, etc.
+
+# Räumliche Daten & Geostatistik
+library(sf)        # Simple Features für Shapefiles
+library(mgcv)      # GAM Modellierung
+library(gratia)    # Visualisierung für GAMs 
+
+# Statistische Hilfsmittel & Diagnostik
+library(broom)     # Saubere Modell-Outputs 
+library(car)       # Statistische Tests
+library(corrplot)  # Korrelationsmatrizen
+
+# Tabellen-Styling & Berichterstellung
+library(knitr)
+library(kableExtra) 
+
+# Layout-Management
+library(patchwork) 
+
+```
+
+## Einleitung
+
+In der Fischereibiologie stellen Längen-Gewichts-Beziehungen (Length–Weight Relationships, LWR) ein zentrales Instrument zur Bewertung des Wachstums und des energetischen Zustands von Fischbeständen dar. Individuen in guter Kondition weisen bei gleicher Länge ein höheres Gewicht auf. Ein etablierter Kennwert zur Quantifizierung dieses Zustands ist der Fulton’sche Konditionsfaktor: $K = 100 \cdot \frac{W}{L^3}$, der eine standardisierte Bewertung der individuellen Körperkondition ermöglicht [@froese2006; @nash2006].
+
+Für die Ostsee, ein stark anthropogen beeinflusstes, brackiges Randmeer mit ausgeprägten Gradienten in Salzgehalt, Temperatur und Sauerstoffverfügbarkeit, besitzt dieser Ansatz eine besondere Relevanz. In den vergangenen Jahrzehnten wurden hier deutliche Veränderungen in den Bestandsgrößen, den Wachstumsmustern und der Fitness verschiedener Arten dokumentiert, die mit Eutrophierung, Sauerstoffmangel und veränderter Konkurrenz in Verbindung gebracht werden [@rosciszewski-dodgson2024; @ustups2013; @froese2025].
+
+Nach dem Zusammenbruch des Dorschbestandes (*Gadus morhua*) [@ices2019] haben Plattfische, insbesondere die Scholle (*Pleuronectes platessa*), an fischereilicher Bedeutung gewonnen. Aktuelle Bestandsbewertungen berichten von sinkender fischereilicher Sterblichkeit und stabilen Rekrutierungsraten [@ICES2022a]. Gleichzeitig zeigen langfristige Analysen aus aus dem Kattegat deutliche Rückgänge in Biomasse und maximaler Körpergröße [@cardinale2010]. Aufgrund ihrer ausgeprägten Standorttreue gilt die Scholle zudem als potenziell anfällig für lokale Habitatveränderungen [@rosciszewski-dodgson2024].
+
+Vor diesem Hintergrund untersucht die vorliegende Analyse die Entwicklung der Schollen-Kondition in der Ostsee über den Zeitraum 1991–2024. Ziel ist es:
+
+-   zeitliche Trends in der Konditionsentwicklung (K) der Scholle zu identifizieren,
+
+-   räumliche Unterschiede zwischen den ICES-Subdivisionen zu analysieren und
+
+-   den Einfluss abiotischer (z.B. Temperatur, Salzgehalt) sowie biotischer Faktoren (z. B. Dorschbestandsdichte) zu quantifizieren.
+
+## Daten & Methoden
+
+### Datenquelle
+
+Die in dieser Analyse verwendeten Daten stammen aus der DATRAS-Datenbank (Database of Trawl Surveys) des International Council for the Exploration of the Sea (ICES). Konkret wurden Daten des Baltic International Trawl Survey (BITS) genutzt, einem standardisierten, fischereiunabhängigen Monitoringprogramm zur Erfassung der Bodenfischbestände in der Ostsee.
+
+Der BITS wird zweimal jährlich im ersten und vierten Quartal (Februar/März sowie November) von den Anrainerstaaten der Ostsee koordiniert durchgeführt und durch ICES methodisch standardisiert. Die DATRAS-Datenbank ist öffentlich über das [ICES-Datenportal](https://www.ices.dk/data/data-portals/Pages/DATRAS.aspx) zugänglich.
+
+Für diese Untersuchung wurden unaggregierte Fang- und biologische Einzeldaten der Jahre 1991 bis 2024 berücksichtigt. Nach der Datenaufbereitung stehen kontinuierliche Datenreihen ab dem Jahr 1994 zur Verfügung. Der Datendownload umfasste alle berichtenden Länder (mit Ausnahme Russlands) sowie die Zielarten Scholle (*Pleuronectes platessa*) und Dorsch (*Gadus morhua*).
+
+Es wurden drei zentrale Datentypen der ICES-Survey-Methodik zusammengeführt:
+
+-   **HH (Haul Hierarchical):** Enthält stationsbezogene Metadaten zum jeweiligen Netzzug (Hol), wie Datum, Uhrzeit, Koordinaten, Fangtiefe, Gerätespezifikationen, Hol-Dauer und -Distanz sowie ausgewählte Umweltparameter (z. B. Temperatur und Salzgehalt).
+
+-   **HL (Length Line):** Dokumentiert die längenbasierte Erfassung des Fangs je Hol und Art, einschließlich Längenklassen, Anzahl der Individuen und zugehöriger Gewichtsangaben.
+
+-   **CA (Catch Assessment):** Umfasst biologische Einzeldaten und ist über Art und Längenklasse mit HL verknüpft. Erfasst werden individuelle Merkmale wie Länge, Gewicht, Geschlecht, Reifegrad und Alter.
+
+Zur Sicherstellung von Transparenz und Reproduzierbarkeit wurden die Daten projektintern klar strukturiert abgelegt:
+
+-   **Rohdaten** (`/data`): Originale CSV-Dateien (`HH.csv`, `HL.csv`, `CA.csv`)
+
+-   **Geodaten** (`/data/ICES_Areas`): Shapefile der offiziellen ICES-Subdivisions zur räumlichen Zuordnung der Fangstationen
+
+-   **Output** (`/output`): Zentraler Speicherort für alle im Projekt generierten Artefakte
+
+    -   **Prozessierte Daten***:* Bereinigte und analyserelevante Datensätze im `.rds`-Format (`plaice_individual_data.rds`, `plaice_haul_aggregated.rds`) sowie ein topologisch bereinigtes und räumlich zugeschnittenes Shapefile (`ices_shape_light.rds`)
+
+    -   **Abbildungen***:* Sämtliche im Bericht verwendeten Grafiken, Karten und Trendanalysen
+
+### Datenaufbereitung
+
+Die Analyse basiert auf ICES-Daten im Exchange-Format (HH, HL, CA), die als CSV-Dateien eingelesen wurden.
+
+```{r daten-import}
+# --- Import ---
+HH <- read.csv("data/HH.csv")
+HL <- read.csv("data/HL.csv")
+CA <- read.csv("data/CA.csv")
+```
+
+**Räumliche Zuordnung**
+
+Zur räumlichen Einordnung der Probenahmen wurden die offiziellen ICES-Subdivisions als Shapefile eingebunden. Um eine korrekte Verschneidung mit den GPS-Positionen der Netzzüge zu ermöglichen, wurden die Geodaten in das Koordinatensystem WGS84 (`EPSG:4326`) transformiert und auf topologische Korrektheit geprüft.
+
+```{r spatial-setup}
+# --- Pfad-Definition ---
+shapefile_path <- "data/ICES_Areas/ICES_Areas_20160601_cut_dense_3857.shp" 
+
+# --- Geodaten-Import und Aufbereitung ---
+ICES_areas_wgs <- st_read(shapefile_path, quiet = TRUE) %>% 
+  st_transform(4326) %>% 
+  st_make_valid()
+```
+
+**Umgang mit fehlenden Werten**
+
+Im ICES-Exchange-Format kennzeichnet der Wert -9 fehlende Angaben. Diese Kodierung wurde in allen Datensätzen systematisch in *NA* überführt.
+
+```{r missing-values}
+# --- Systematische Bereinigung der Fehlwerte (-9 -> NA) ---
+CA[CA == -9] <- NA
+HH[HH == -9] <- NA
+HL[HL == -9] <- NA
+```
+
+**Standardisierung der Längenangaben**
+
+Längenangaben liegen im ICES-Format in unterschiedlichen Klassenbreiten vor (<https://vocab.ices.dk/?ref=18>). Zur Sicherstellung konsistenter Berechnungen wurden alle Längen in Zentimeter standardisiert.
+
+Die Klassenbreite wurde anhand des `LngtCode` bestimmt. Da Längen im Exchange-Format auf die untere Klassengrenze abgerundet sind, wurde zusätzlich die Klassenmitte berechnet, um systematische Unterschätzungen zu reduzieren.
+
+Alle weiteren Analysen basieren auf den standardisierten Längenangaben.
+
+```{r length-standardization}
+# --- Funktion zur Längenstandardisierung ---
+standardize_length <- function(df) {
+  df %>%
+    mutate(
+      # 1. Bestimmung der Klassenbreite [cm]
+      ClassWidth_cm = case_when(
+        LngtCode == "." ~ 0.1,  # 1 mm
+        LngtCode == "0" ~ 0.5,  # 5 mm
+        LngtCode == "1" ~ 1,    # 1 cm
+        LngtCode == "2" ~ 2,    # 2 cm  
+        LngtCode == "5" ~ 5,    # 5 cm
+        TRUE ~ NA_real_
+      ),
+      
+      # 2. Umrechnung basierend auf ICES-Code
+      # LngtCode '.' und '0' bedeuten die Eingabe war in mm
+      Length_cm = case_when(
+        LngtCode %in% c(".", "0") ~ LngtClass / 10, 
+        TRUE ~ LngtClass                             
+      ),
+      
+      # 3. Berechnung der Klassenmitte
+      Length_mid_cm = Length_cm + ClassWidth_cm / 2
+    )
+}
+
+# --- Anwendung ---
+CA <- standardize_length(CA)
+HL <- standardize_length(HL)
+```
+
+**CPUE-Berechnung und Verknüpfung mit Stationsdaten**
+
+Ziel dieses Verarbeitungsschrittes war die Erstellung eines standardisierten, räumlich referenzierten Hol-Datensatzes, der artspezifische Fangraten (CPUE) mit Positions- und Umweltinformationen kombiniert. Der aggregierte Hol-Datensatz stellt einen methodischen Zwischenschritt dar und wird im nächsten Verarbeitungsschritt auf Individualebene (CA-Datensatz) zurückgespielt.
+
+Zur Berechnung der Fangraten (Catch per Unit Effort, CPUE) wurden artspezifische Individuenzahlen aus dem Längendatensatz (HL) auf Hol-Ebene aggregiert. Für Dorsch (*Gadus morhua*) wurden ausschließlich Individuen ≥ 35 cm berücksichtigt. Diese Schwelle basiert auf trophischen Analysen aus der westlichen Ostsee, in denen Plattfische ausschließlich im Nahrungsspektrum von Individuen \>35 cm nachgewiesen wurden [@froese2025]. Individuen dieser Größenklasse weisen somit ein erweitertes, fischbasiertes Nahrungsspektrum auf und repräsentieren trophisch höher positionierte Prädatoren mit einem potenziell relevanten Einfluss auf die Scholle. Die CPUE größerer Dorsche wird in der nachfolgenden Analyse als Proxy für den lokalen Prädationsdruck verwendet. Für die Scholle (*Pleuronectes platessa*) wurden alle Längenklassen einbezogen.
+
+```{r cpue-preparation}
+# --- 1. Hol-basierte Aggregation der Individuenzahlen: Großer Dorsch (≥ 35 cm) ---
+cod_counts_large <- HL %>% 
+  filter(ValidAphiaID == "126436", Length_mid_cm >= 35) %>% 
+  group_by(Survey, Year, Quarter, Country, Ship, Gear, HaulNo) %>%
+  summarise(Total_Cod_Count_Large = sum(HLNoAtLngt, na.rm = TRUE), .groups = "drop")
+
+# --- 2. Hol-basierte Aggregation der Individuenzahlen: Scholle ---
+plaice_counts <- HL %>% 
+  filter(ValidAphiaID == "127143") %>%
+  group_by(Survey, Year, Quarter, Country, Ship, Gear, HaulNo) %>%
+  summarise(Total_Plaice_Count = sum(HLNoAtLngt, na.rm = TRUE), .groups = "drop")
+```
+
+Die Hol-Daten wurden vorab gefiltert. Berücksichtigt wurden ausschließlich valide Hols (`HaulVal = "V"`), mit einer Mindestschleppdauer von 10 Minuten sowie vollständigen Positionsangaben. Diese Filterung dient der Reduktion methodischer Verzerrungen durch unvollständige oder nicht standardisierte Fänge.
+
+```{r cleanup-HH-data}
+# --- Qualitätskontrolle und Filterung der Stationsdaten (HH) ---
+HH <- HH %>%
+  filter(
+    # Validität
+    HaulVal == "V",
+    # Mindestdauer von 10 Min
+    !is.na(HaulDur), HaulDur >= 10, 
+    #Geografische Integrität
+    !is.na(HaulLat), !is.na(HaulLong)      
+  )
+```
+
+Für jeden Hol wurden Schleppdauer, Position sowie verfügbare Umweltparameter (Tiefe, Oberflächen- und Bodentemperatur, Oberflächen- und Bodensalininität) extrahiert. Die Koordinaten wurden in ein sf-Objekt (Koordinatensystem: WGS84, `EPSG:4326`) überführt und mittels räumlicher Verschneidung einer ICES-Subdivision zugeordnet, um eine standardisierte regionale Einordnung zu ermöglichen.
+
+Die Fangrate (Catch per Unit Effort, CPUE) wurde als Anzahl Individuen (N) pro 60 Minuten Schleppzeit (`HaulDur)` berechnet:
+
+$CPUE = \frac{N}{HaulDur}\cdot 60$.
+
+Der resultierende Datensatz enthält pro Hol eine eindeutige Kombination aus Survey- und Stationsinformationen, räumlicher Zuordnung, Umweltparametern sowie artspezifischer CPUE und bildet die Grundlage für die weitere Datenvorverarbeitung.
+
+```{r finalize-hauls}
+# --- 1. Extraktion und Georeferenzierung der Stationsdaten ---
+# Aufbereitung der Basisdaten (Umwelt & Metadaten) für die räumliche Analyse
+hauls_sf <- HH %>%
+  select(
+    Survey, Year, Quarter, Country, Ship, Gear, HaulNo,
+    # HaulDur für CPUE-Berechnung
+    HaulDur, 
+    # Koordinaten
+    HaulLat, HaulLong,
+    # Umweltdaten
+    Depth, SurTemp, BotTemp, SurSal, BotSal
+  ) %>%
+  distinct() %>%       # Sicherstellung der Eindeutigkeit auf Hol-Ebene
+  st_as_sf(            # Umwandluch in sf-Objekt (Simple Features)
+    coords = c("HaulLong", "HaulLat"),
+    crs = 4326,
+    remove = FALSE)
+
+# --- 2. Räumliche Zuordnung und Datenintegration ---
+# Verschneidung mit ICES-Polygonen und CPUE-Integration
+hauls_final <- st_join(hauls_sf, ICES_areas_wgs, join = st_intersects) %>%
+  st_drop_geometry() %>% 
+  # Selektion der Kernvariablen inkl. der neuen Gebietszuordnung
+  select(Survey, Year, Quarter, Country, Ship, Gear, HaulNo, SubDivisio, 
+         HaulLat, HaulLong, HaulDur,
+         Depth, SurTemp, BotTemp, SurSal, BotSal
+  ) %>%
+  # Integration der aggregierten Zähldaten aus dem HL-Datensatz
+  left_join(cod_counts_large, by = c("Survey", "Year", "Quarter", "Country", "Ship", "Gear", "HaulNo")) %>%
+  left_join(plaice_counts, by = c("Survey", "Year", "Quarter", "Country", "Ship", "Gear", "HaulNo")) %>%
+  mutate(
+    # NAs auf 0 setzen für Hols ohne Fang
+    Total_Cod_Count_Large = replace_na(Total_Cod_Count_Large, 0),
+    Total_Plaice_Count = replace_na(Total_Plaice_Count, 0),
+    # CPUE-Berechnung: Anzahl pro 60 Minuten Schleppzeit
+    CPUE_Cod_Large = (Total_Cod_Count_Large / HaulDur) * 60,
+    CPUE_Plaice = (Total_Plaice_Count / HaulDur) * 60
+  ) %>%
+  # Finale Validierung der Eindeutigkeit pro Netzzug
+  distinct(Survey, Year, Quarter, Country, Ship, Gear, HaulNo, .keep_all = TRUE)
+```
+
+### Ausreißer und Konditionsfaktor
+
+Ziel dieses Abschnitts ist die Erstellung eines biologisch plausiblen und statistisch belastbaren Individualdatensatzes für die Analyse des Konditionszustands der Scholle (*Pleuronectes platessa*). Ergänzend dazu wird ein aggregierter Datensatz auf Haul-Ebene erzeugt, der für räumliche Analysen und den Vergleich mit Fang- und Umweltparametern genutzt wird.
+
+Die Datenaufbereitung umfasst folgende Schritte:
+
+-   Schätzung gruppenspezifischer Längen-Gewichts-Beziehungen zur Identifikation und Entfernung statistischer Ausreißer,
+
+-   Berechnung des Fulton’schen Konditionsfaktors,
+
+-   Verknüpfung der bereinigten Individualdaten mit vorverarbeiteten Haul-Daten sowie
+
+-   Aggregation der Individualdaten auf Haul-Ebene.
+
+**Ausreißerbereinigung auf Basis der Längen-Gewichts-Beziehung**
+
+Zur Sicherstellung einer hohen Datenqualität erfolgt die Ausreißerbereinigung auf Grundlage der allometrischen Längen-Gewichts-Beziehung (Length–Weight Relationship, LWR). Die theoretische Grundlage bildet die log-linearisierte Form der Relation:
+
+$log_{10}(W) = a + b \cdot \log_{10}(L)$.
+
+Hierbei repräsentiert W das Körpergewicht in Gramm, L die Gesamtlänge in Zentimetern sowie a und b die artspezifischen Regressionsparameter.
+
+Die nachfolgende Abbildung 1 verdeutlicht, dass die Scholle dieser linearen Beziehung im logarithmischen Raum folgt, zeigt jedoch auch die natürliche Streuung sowie potenzielle Fehlmessungen auf, die eine Bereinigung notwendig machen.
+
+```{r raw_data, echo=FALSE, fig.width=6, fig.height=4, fig.cap="<small>**Abbildung 1:** Längen-Gewichts-Verteilung der Scholle (Rohdaten). Visuelle Prüfung der log-linearisierten Beziehung. Ausgangsbasis vor der gruppenspezifischen Ausreißerbereinigung.</small>"}
+# --- 1. Daten filtern (Nur Scholle) ---
+plot_raw_plaice <- CA %>%
+  filter(ValidAphiaID == "127143", !is.na(IndWgt), !is.na(Length_mid_cm))
+
+# --- 2. Scatterplot der Rohdaten ---
+ggplot(plot_raw_plaice, aes(x = Length_mid_cm, y = IndWgt)) +
+  geom_point(alpha = 0.3, color = "darkblue", size = 0.8) +
+  # Regressionsgerade
+  geom_smooth(method = "lm", color = "black", linetype = "dashed", se = FALSE, size = 0.6) +
+  # Logarithmische Achsen
+  scale_x_log10() +
+  scale_y_log10() +
+  annotation_logticks() +
+  labs(
+    x = "Länge (cm) [log10]",
+    y = "Gewicht (g) [log10]"
+  ) +
+  theme_minimal()
+```
+
+In Anlehnung an methodische Vorgehen von @froese2025 wurden Individuen als Ausreißer definiert, wenn ihre Residuen mehr als drei Standardabweichungen vom vorhergesagten Mittelwert der Längen-Gewichts-Regression abwichen. Diese Individuen wurden sowohl aus der Parameterschätzung als auch aus allen weiteren Analysen ausgeschlossen.
+
+Im Gegensatz zu der oben dargestellten globalen Regressionsgerade erfolgt die Ausreißerbereinigung differenziert nach Jahr, Quartal und biologischer Gruppe. Dabei wurden reife Weibchen separat von der übrigen Population (Männchen und juvenile Individuen) analysiert. Grundlage hierfür ist die in der DATRAS-Datenbank hinterlegte Reife-Skala (<https://vocab.ices.dk/?ref=128>).
+
+Diese Trennung ist biologisch notwendig, da das Gonadengewicht während der Laichphase einen signifikanten Anteil an der Gesamtkörpermasse einnehmen kann. Eine Vermischung dieser Gruppen würde die Schätzung der Parameter a und b verzerren [@froese2006].
+
+```{r mature_codes}
+# --- Definition aller Codes für "REIFE" Stadien ---
+mature_codes <- c(
+  "2", "3", "4", "5", "52", "53", "54", "55", "62", "63", "64", "65", 
+  "B", "Ba", "Bb", "C", "Ca", "Cb", "D", "Da", "Db", "E", "M", 
+  "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", 
+  "R1_2", "R1_3", "R1_4", "R2_4", "R2_6", "R2_8", 
+  "RF2", "RF3", "RF4", "RF5", "RF6", "S2", "S3", "S4", "S5", "S6"
+)
+```
+
+**Berechnung des Konditionsfaktors**
+
+Auf Basis der bereinigten Individualdaten wird anschließend der Fulton’sche Konditionsfaktor berechnet:
+
+$K = 100 \cdot \frac{W}{L^3}$
+
+Der Faktor setzt das beobachtete Gewicht (W) ins Verhältnis zum theoretischen Volumen bei isometrischem Wachstum (L³). Der Faktor 100 dient ausschließlich der Skalierung der Werte um 1.0. Die Anwendung des Fulton’sche Konditionsfaktors ist für Plattfische historisch etabliert [@nash2006] und ermöglicht eine robuste Vergleichbarkeit zwischen Individuen und Zeiträumen. Es ist jedoch zu beachten, dass K hochsensibel auf saisonale Zyklen (Nahrungsaufnahme, Reproduktion) reagiert [@froese2006], weshalb neben übergeordneten zeitlichen Trends, die weitere Analyse vorrangig quartalsweise erfolgt.
+
+**Individualdatensatz (Fish-Level)**
+
+Nach Ausreißerbereinigung und Berechnung des Konditionsfaktors werden die Individualdaten mit den zuvor aufbereiteten Haul-Daten verknüpft. Dadurch werden jedem Individuum neben biologischen Merkmalen (Länge, Gewicht, Reifestatus, Kondition) auch Umweltparameter (z. B. Temperatur, Salzgehalt) sowie fischereiliche Kenngrößen (CPUE) zugeordnet.
+
+```{r CA_meta}
+# --- Individualdatensatz ---
+CA_meta <- CA %>% 
+  # Nur Schollen mit Gewicht und Länge
+  filter(ValidAphiaID == "127143", !is.na(IndWgt), !is.na(Length_mid_cm)) %>%
+  # Trennung der reifen Weibchen von der Restpopulation (Males/Juveniles), 
+  # Vermeidung von Verzerrungen durch Gonadengewicht in der Regression
+  mutate(BioGroup = case_when(
+    (Sex %in% c("F", "B")) & Maturity %in% mature_codes ~ "Female_Mature",
+    TRUE ~ "Males_Juveniles_Other"
+  )) %>%
+  # Ausreißerbereinigung pro Jahr, Quartal und Gruppe:
+  # Ausreißer werden entfernt, wenn sie >3 Standardabweichungen vom vorhergesagten Gewicht abweichen
+  group_by(Year, Quarter, BioGroup) %>%
+  filter(n() > 5) %>%  # Mindestanzahl für statistische Belastbarkeit
+  mutate(
+    # Berechnung der Residuen der Längen-Gewichts-Regression
+    log_resid = resid(lm(log10(IndWgt) ~ log10(Length_mid_cm))),
+    sd_resid = sd(log_resid),
+    is_outlier = abs(log_resid) > (3 * sd_resid)
+  ) %>%
+  ungroup() %>%
+  filter(is_outlier == FALSE) %>%
+  # Berechnung Fulton's Condition Factor (K)
+    # Maßzahl für die Kondition: K=100*W/L^3 
+    # W = Gewicht des Fisches (g)
+    # L = Länge des Fisches (cm)
+  mutate(K_Fulton = 100 * (IndWgt / (Length_mid_cm^3))) %>%
+  # Join mit den Haul-Informationen (Umwelt, CPUE, SubDivisio)
+  left_join(hauls_final, by = c("Survey", "Year", "Quarter", "Country", "Ship", "Gear", "HaulNo")) %>%
+  # Regionen benennen
+  mutate(Region = case_when(
+    SubDivisio == "20" ~ "Skagerrak", 
+    SubDivisio == "21" ~ "Kattegat",
+    SubDivisio == "22" ~ "Beltsee & Kieler Bucht", 
+    SubDivisio == "23" ~ "Öresund", 
+    SubDivisio == "24" ~ "Arkona-Becken",
+    SubDivisio == "25" ~ "Bornholm-Becken", 
+    SubDivisio == "26" ~ "Südöstliche Ostsee", 
+    as.numeric(SubDivisio) > 26 ~ "Nördliche Zentrale Ostsee", # SD 27, 28, 29, 32
+    TRUE ~ NA_character_
+  )) %>%
+  # Geografische Sortierung von West nach Ost (Faktor)
+  mutate(Region = factor(Region, levels = c(
+    "Skagerrak", "Kattegat", "Beltsee & Kieler Bucht", "Öresund",
+    "Arkona-Becken", "Bornholm-Becken", "Südöstliche Ostsee",
+    "Nördliche Zentrale Ostsee"
+  ))) %>%
+  filter(!is.na(Region)) # Nur Fische aus Zielgebieten
+```
+
+**Aggregierter Datensatz (Haul-Level)**
+
+Für spätere räumliche Analysen sowie zur Untersuchung von Zusammenhängen zwischen Kondition, Fangraten und Umweltbedingungen wird eine Aggregation auf Haul-Ebene vorgenommen.
+
+Für jeden Haul wurden berechnet:
+
+-   Medianer Konditionsfaktor,
+
+-   Anzahl gemessener Individuen,
+
+-   mittlere CPUE der Zielart,
+
+-   mittlere CPUE großer Prädatoren,
+
+-   mittlere Bodentemperatur,
+
+-   mittlerer Salzgehalt sowie
+
+-   mittlere Wassertiefe.
+
+```{r map_data_all}
+# --- Aggregierter-Datensatz ---
+map_data_all <- CA_meta %>%
+  group_by(Year, Quarter, Region, SubDivisio, BioGroup, HaulLat, HaulLong, HaulNo) %>%
+  summarise(
+    median_K = median(K_Fulton, na.rm = TRUE),
+    n_plaice_measured = n(),                    # Anzahl gemessener Schollen im Hol
+    cpue_plaice = mean(CPUE_Plaice),            # CPUE Scholle
+    cpue_cod_large = mean(CPUE_Cod_Large),      # CPUE Dorsch (>35cm)
+    temp_bottom = mean(BotTemp),                # Bodentemperatu
+    sal_bottom = mean(BotSal),                  # Salinität
+    depth = mean(Depth),                        # Tiefe
+    .groups = "drop"
+  ) %>%
+  # Bereinigung von statistischen Artefakten (NaN zu NA)
+  mutate(across(where(is.numeric), ~ ifelse(is.nan(.), NA, .)))
+```
+
+### Qualitätskontrolle
+
+Bevor die aufbereiteten Datensätze für die weiterführende Analyse exportiert werden, erfolgt eine zweistufige Qualitätskontrolle. Diese stellt sicher, dass die Ausreißerbereinigung präzise gegriffen hat und die Anwendung des Fulton'schen Konditionsfaktors biologisch gerechtfertigt ist.
+
+**Effekt der Ausreißer-Bereinigung**
+
+Die Anwendung der 3-SD-Regel auf Basis der gruppenspezifischen Längen-Gewichts-Beziehungen führte zum Ausschluss biologisch unplausibler Datenpunkte (siehe Abbildung 2).
+
+```{r Qualitätskontrolle}
+# --- 1. Verwendeter 3-SD-Filter aus dem CA_meta-Code ---
+CA_qc <- CA %>% 
+  filter(ValidAphiaID == "127143", !is.na(IndWgt), !is.na(Length_mid_cm)) %>%
+  mutate(BioGroup = case_when(
+    (Sex %in% c("F", "B")) & Maturity %in% mature_codes ~ "Female_Mature",
+    TRUE ~ "Males_Juveniles_Other"
+  )) %>%
+  group_by(Year, Quarter, BioGroup) %>%
+  filter(n() > 5) %>% 
+  mutate(
+    log_resid = resid(lm(log10(IndWgt) ~ log10(Length_mid_cm))),
+    sd_resid = sd(log_resid),
+    is_outlier = abs(log_resid) > (3 * sd_resid)  # 3-SD
+  ) %>%
+  ungroup()
+
+# --- 2. Sensitivitätsanalyse: 5-SD-Ansatz ---
+CA_sa <- CA %>% 
+  filter(ValidAphiaID == "127143", !is.na(IndWgt), !is.na(Length_mid_cm)) %>%
+  mutate(BioGroup = case_when(
+    (Sex %in% c("F", "B")) & Maturity %in% mature_codes ~ "Female_Mature",
+    TRUE ~ "Males_Juveniles_Other"
+  )) %>%
+  group_by(Year, Quarter, BioGroup) %>%
+  filter(n() > 5) %>% 
+  mutate(
+    log_resid = resid(lm(log10(IndWgt) ~ log10(Length_mid_cm))),
+    sd_resid = sd(log_resid),
+    is_outlier = abs(log_resid) > (5 * sd_resid) # 5-SD
+  ) %>%
+  ungroup()
+
+# --- 3. Statistik (3-SD) ---
+n_qc    <- nrow(CA_qc) # 82121
+n_outliers  <- sum(CA_qc$is_outlier) # 600
+n_after_outliers <- n_qc - n_outliers # 81521
+percent_rem <- round((n_outliers / n_qc) * 100, 2) # 0.73
+
+# --- 4. Statistik (5-SD) ---
+n_sa <- nrow(CA_sa) # 82121
+n_outliers_5  <- sum(CA_sa$is_outlier) # 90
+n_after_outliers_5 <- n_sa - n_outliers_5 # 82031
+percent_rem_5 <- round((n_outliers_5 / n_sa) * 100, 2) # 0.11
+
+# --- 5. Weitere Datenbereinigung ---
+n_final <- nrow(CA_meta) # 80652
+n_missing_geo_or_haul <- n_after_outliers - n_final # 869
+```
+
+```{r Ausreißeridentifikation, echo=FALSE, fig.width=12, fig.height=6, fig.cap="<small>**Abbildung 2:** Vergleich der Ausreißeridentifikation basierend auf der Längen-Gewichts-Beziehung (n = 82.121). A: Der gewählte 3-SD-Filter (0,73 % Ausschluss) erfasst neben Fehlmessungen auch biologische Grenzfälle. B: Die Sensitivitätsanalyse mit einem 5-SD-Filter (0,11 % Ausschluss) zeigt die Beschränkung auf extreme statistische Ausreißer.</small>"}
+# --- 1. Plot für 3-SD (Konservativ) ---
+p1 <- ggplot(CA_qc %>% arrange(is_outlier), aes(x = Length_mid_cm, y = IndWgt)) +
+  geom_point(aes(color = is_outlier), alpha = 0.3, size = 1) +
+  scale_x_log10() +
+  scale_y_log10() +
+  annotation_logticks() +
+  scale_color_manual(
+    values = c("FALSE" = "darkblue", "TRUE" = "firebrick"),
+    labels = c("FALSE" = "Valide Daten", "TRUE" = "Ausreißer")
+  ) +
+  labs(title = "A: Konservativer Filter (3-SD)",
+    subtitle = paste0("Ausschluss: ", n_outliers, " Individuen (", percent_rem, " %)"),
+    x = "Länge (cm) [log10]",
+    y = "Gewicht (g) [log10]",
+    color = "Status"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# --- 2. Plot für 5-SD (Liberal) ---
+p2 <- ggplot(CA_sa %>% arrange(is_outlier), aes(x = Length_mid_cm, y = IndWgt)) +
+  geom_point(aes(color = is_outlier), alpha = 0.3, size = 1) +
+  scale_x_log10() +
+  scale_y_log10() +
+  annotation_logticks() +
+  scale_color_manual(
+    values = c("FALSE" = "darkblue", "TRUE" = "firebrick"),
+    labels = c("FALSE" = "Valide Daten", "TRUE" = "Ausreißer")
+  ) +
+  labs(title = "B: Liberaler Filter (5-SD)",
+       subtitle = paste0("Ausschluss: ", n_outliers_5, " Individuen (", percent_rem_5, " %)"),
+    x = "Länge (cm) [log10]",
+    y = "Gewicht (g) [log10]",
+    color = "Status"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# --- 3. Plot-Zusammenführung ---
+(p1 + p2) + 
+  plot_layout(guides = "collect") & 
+  theme(
+    legend.position = "bottom",
+    axis.title = element_text(size = 11),
+    axis.text = element_text(size = 9),
+    plot.title = element_text(size = 13, face = "bold")
+  )
+
+```
+
+Durch die Anwendung des 3-SD-Filters wurden von ursprünglich `r n_qc` Individuen insgesamt `r n_outliers` als Ausreißer klassifiziert. Dies entspricht einer Ausschlussquote von lediglich `r round(percent_rem, 2)` %. Eine Sensitivitätsanalyse mit einem weiter gefassten Filter von 5 Standardabweichungen (5-SD) ergab lediglich `r n_outliers_5` potenzielle Ausreißer (`r round(percent_rem_5, 2)` %). Der Vergleich beider Ansätze (siehe Abbildung 2) verdeutlicht, dass die 3-SD-Grenze aufgrund der sehr hohen Stichprobenzahl (n\>80.000) und der daraus resultierenden geringen Residualvarianz sehr konservativ greift und auch Individuen an den Rändern der natürlichen biologischen Streuung erfasst. Dennoch wurde die striktere 3-SD-Filterung beibehalten, um eine maximale Robustheit der nachfolgenden Konditionsberechnungen gegenüber Messfehlern zu garantieren.
+
+Ein weiterer Ausschluss von `r n_missing_geo_or_haul` Datensätzen resultierte aus der räumlichen Verschneidung sowie der Prüfung der Stationsdaten: Diese Individuen konnten entweder keiner der definierten Untersuchungsregionen zugeordnet werden oder stammten aus Netzzügen, die die methodischen Mindestanforderungen nicht erfüllten. Der finale Datensatz für die weiterführenden Analysen umfasst somit `r n_final` Individuen.
+
+Angesichts des minimalen Datenverlusts bleibt die statistische Repräsentativität gewahrt, während die Validität der Auswertungen erhöht wird.
+
+**Validierung des Fulton’schen Konditionsfaktors (K)**
+
+Die Verwendung des Fulton’schen Konditionsfaktors (K) basiert auf der Annahme eines isometrischen Wachstums, bei dem das Körpergewicht proportional zur dritten Potenz der Länge steigt: ($W \propto L^3$).
+
+Da die Berechnungsformel für K den Exponenten im Nenner starr auf den Wert 3.0 festsetzt, setzt ihre valide Anwendung voraus, dass auch die biologische Längen-Gewichts-Beziehung ($W =a\cdot{L^b}$) der untersuchten Population diesem Wert entspricht. Weicht der tatsächliche biologische Exponent b signifikant von diesem Idealwert ab (allometrisches Wachstum), wäre die Anwendung komplexerer Indizes, wie des relativen Konditionsfaktors nach Le Cren, notwendig [@froese2006].
+
+Zur Überprüfung dieser Voraussetzung wurde der Exponent b nach der Ausreißerbereinigung für die definierten biologischen Gruppen separat mittels einer log-linearisierten Regression geschätzt.
+
+```{r b-Validation}
+# --- Berechnung des Längen-Gewichts-Beziehung und der zugehörigen Parameter ---
+b_validation <- CA_meta %>%
+  group_by(BioGroup) %>%
+  summarise(
+    n = n(),
+    mod = list(lm(log10(IndWgt) ~ log10(Length_mid_cm))),
+    b_value = round(coef(mod[[1]])[2], 3),
+    conf_low = round(confint(mod[[1]])[2,1], 3),
+    conf_high = round(confint(mod[[1]])[2,2], 3),
+    r_squared = round(summary(mod[[1]])$r.squared, 3),
+    .groups = "drop"
+  ) %>%
+  select(-mod)
+```
+
+Der berechnete Exponent b für beide untersuchten Gruppen liegt sehr nahe am theoretischen Idealwert 3 (Reife Weibchen: b≈3,1 Restpopulation b≈2,97, siehe Tabelle 1). Gemäß der Kriterien von [@froese2006] deutet ein 95 %-Konfidenzintervall, das den Wert 3.0 einschließt oder – wie in Tabelle 1 ersichtlich – nur minimal davon abweicht, zudem auf ein isometrisches Wachstumsmuster hin. Die geringfügigen Abweichungen sind biologisch erwartbar und statistisch vernachlässigbar. Damit ist die Voraussetzung für die Anwendung von Fulton’s K erfüllt, und es kann auf komplexere Indizes verzichtet werden [@froese2006].
+
+```{r LWR-Ausgabetabelle, echo=FALSE}
+# --- 1. Basis-Tabelle erstellen mit knitr::kable ---
+knitr::kable(b_validation, 
+             col.names = c("Biologische Gruppe", "Anzahl (n)", "Exponent b", "95% CI (unten)", "95% CI (oben)", "R²"),
+             caption = "<small><b>Tabelle 1:</b> Regressionsparameter der Längen-Gewichts-Beziehung zur Validierung der Isometrie-Annahme. Dargestellt sind der Schätzwert für b, das 95 %-Konfidenzintervall sowie das Bestimmtheitsmaß R².</small>",
+             align = "lrrrrr") %>%
+  
+# --- 2. Styling der Tabelle (Bootstrap-Theme) ---
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = F, 
+                position = "center") %>%
+  
+# --- 3. Spezifische Spaltenformatierung ---
+  column_spec(1, bold = TRUE) %>%     
+  column_spec(3, bold = TRUE)         
+```
+
+### Datenexport und Bereitstellung
+
+Zum Abschluss der Datenaufbereitung werden drei spezialisierte Datensätze exportiert. Diese Trennung ist methodisch notwendig, um den unterschiedlichen statistischen Anforderungen der folgenden Analysekapitel gerecht zu werden und eine flexible Weiterverarbeitung zu ermöglichen.
+
+**Individualdatensatz** : enthält die biologischen Parameter jedes einzelnen Individuums. Er dient primär der biologischen Detailanalyse, wie der Erstellung von Zeitreihen und biologischen Regressionen.
+
+```{r Export-Data_ind}
+# --- Export der Einzelfisch-Daten ---
+# Für Boxplots, Zeitreihen und Regressionen
+saveRDS(CA_meta, "output/plaice_individual_data.rds")
+```
+
+Da Umweltparameter (Temperatur, Salzgehalt) und Fangraten (CPUE) pro Hol erhoben wurden, teilen alle Individuen eines Hols dieselben Umweltwerte. Eine ausschließliche Analyse auf Individualebene statistisch problematisch.
+
+**Aggregierter Haul-Level-Datensatz**: dient daher der korrekten Untersuchung von Umwelt-Konditions-Zusammenhängen sowie der räumlichen Darstellung der Hols auf (interaktiven) Karten.
+
+```{r Export-Data_haul}
+# --- Export der Aggregierten Daten ---
+# Für die interaktive Karte und CPUE-Korrelationen
+saveRDS(map_data_all, "output/plaice_haul_aggregated.rds")
+```
+
+Zusätzlich wird ein bereinigtes Shapefile der ICES-Statistikgebiete exportiert. Um die Rechenlast bei der späteren Erstellung interaktiver Karten zu minimieren, wurde das Shapefile auf die räumliche Ausdehnung des Untersuchungsgebiets zugeschnitten.
+
+```{r Export-Shapefile}
+# --- 1. Zuschneidung der Shapefile auf Untersuchungsgebiet ---
+lon_min <- min(CA_meta$HaulLong, na.rm = TRUE) - 0.5
+lon_max <- max(CA_meta$HaulLong, na.rm = TRUE) + 0.5
+lat_min <- min(CA_meta$HaulLat, na.rm = TRUE) - 0.5
+lat_max <- max(CA_meta$HaulLat, na.rm = TRUE) + 0.5
+
+ICES_light <- ICES_areas_wgs %>%
+  st_crop(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max) %>%
+  st_simplify(dTolerance = 0.001) 
+
+# --- 2. Export deszugeschnittenen Shapefiles ---
+saveRDS(ICES_light, "output/ices_shape_light.rds")
+```
+
+## Ergebnisse
+
+### Datenbasis und Bestandsstruktur
+
+Um die Analyse von der rechenintensiven Datenaufbereitung zu trennen und eine saubere Arbeitsumgebung zu gewährleisten, wird im nächsten Schritt der Arbeitsspeicher bereinigt.
+
+```{r reset}
+# Alle Objekte aus der Umgebung löschen, um Platz zu schaffen
+rm(list = ls())
+```
+
+Ab diesem Zeitpunkt wird ausschließlich mit den exportierten, bereinigten Datensätzen gearbeitet.
+
+```{r clean_import}
+# --- Import der bereinigten Daten ---
+data_ind <- readRDS("output/plaice_individual_data.rds")
+data_haul <- readRDS("output/plaice_haul_aggregated.rds")
+ices_shape <- readRDS("output/ices_shape_light.rds")
+```
+
+**Stichprobenumfang und räumliche Abdeckung**
+
+Bevor die Kondition analysiert werden kann, muss die Struktur der Stichprobe verstanden werden. Insgesamt umfasst der aufbereitete Datensatz `r nrow(data_ind)` individuell vermessene Schollen. Während der Rohdatensatz das Jahr 1991 einschloss, stehen nach der Datenaufbereitung und -bereinigung kontinuierliche Datenreihen ab dem Jahr 1994 zur Verfügung. Der Datensatz umfasst die westliche und zentrale Ostsee (SD 20–26). Ein deutlicher Schwerpunkt der Probenahme liegt dabei auf der Beltsee/Kieler Bucht (SD 22) mit 23.741 Individuen sowie dem Arkona-Becken (SD 24) mit 24.140 Individuen. Für die nördlichen und östlichen Subdivisionen (SD 27, 28, 29, 32) liegen keine validen Individualmessungen vor. Die zeitliche und räumliche Verteilung der Stichproben ist in Tabelle 2 zusammengefasst.
+
+```{r Stichprobenumfang, echo=FALSE}
+# --- Tabelle der Einzelfischdaten gruppiert nach Jahrzehnten ---
+data_ind %>%
+  mutate(Decade = paste0(floor(Year / 10) * 10, "er")) %>%
+  group_by(Region, Decade) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  pivot_wider(names_from = Decade, values_from = n, values_fill = 0) %>%
+  mutate(Gesamt = rowSums(select(., ends_with("er")))) %>%
+  kable(caption = "<small><b>Tabelle 2:</b> Anzahl der untersuchten Schollen (Einzelfischdaten) nach Region und Jahrzehnt.</small>",
+        align = "lrrrrr") %>%
+  # Styling der Tabelle
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = F, 
+                position = "center") %>%
+  column_spec(1, bold = TRUE) %>% 
+  column_spec(6, bold = TRUE, background = "#f2f2f2")
+```
+
+**Längenstruktur und Längen-Gewichts-Beziehung**
+
+Das Längen-Histogramm (siehe Abbildung 3A) verdeutlicht die breite Verteilung der Individuen über ein Spektrum von 5 cm bis über 50 cm. Die Stichprobe weist dabei einen Median von `r median(data_ind$Length_mid_cm)` cm auf. Dabei haben `r round(sum(data_ind$Length_mid_cm >= 25) / nrow(data_ind) * 100, 1)` % aller untersuchten Schollen die gesetzliche Mindestreferenzgröße für die Erhaltung (Minimum Conservation Reference Sizes, MCRS) von 25 cm erreicht oder überschritten [@bak-georgsen2025]. Innerhalb dieser Verteilung zeigt sich bei den reifen Weibchen eine deutliche Rechtsverschiebung im Vergleich zur Gruppe der Männchen und juvenilen Fische. Während letztere den Bereich unterhalb der MCRS dominieren, stellen die reifen Weibchen den Großteil der Individuen in den höheren Längenklassen dar. Diese differenzierte Struktur unterstreicht die Notwendigkeit einer gesonderten statistischen Analyse dieser Gruppe.
+
+```{r Gesamt_Charakterisierung, echo=FALSE, fig.width=12, fig.height=6, fig.cap="<small>**Abbildung 3:** Biologische Charakterisierung des Gesamtdatensatzes (n = 82.121). (A) Längenverteilung mit MCRS-Referenz (25 cm); (B) Längen-Gewichts-Beziehung (log-log) mit Regressionsparametern.</small>"}
+# --- 1. LWR und Koeffizienten der linearen Regression im Log-Raum ---
+lm_lw_global <- lm(log10(IndWgt) ~ log10(Length_mid_cm), data = data_ind)
+b_lw <- round(coef(lm_lw_global)[2], 3)
+a_lw <- round(10^coef(lm_lw_global)[1], 5)
+r2_lw <- round(summary(lm_lw_global)$r.squared, 3)
+n_global <- format(nrow(data_ind), big.mark = ".")
+
+# --- 2. Plot A: Histogramm mit MCRS-Linie ---
+p1 <- ggplot(data_ind, aes(x = Length_mid_cm, fill = BioGroup)) +
+  geom_histogram(binwidth = 1, color = "white", linewidth = 0.1, position = "stack") +
+  # MCRS Linie bei 25 cm
+  geom_vline(xintercept = 25, linetype = "dashed", color = "black", linewidth = 0.8) +
+  annotate("text", x = 28, y = 5000, label = "MCRS", angle = 0, vjust = -0.5, size = 3) +
+  scale_fill_manual(values = c("Female_Mature" = "#e41a1c", "Males_Juveniles_Other" = "#377eb8"),
+                    labels = c("Mature Females", "Males & Juveniles")) +
+  scale_x_continuous(breaks = seq(0, 100, by = 5)) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "A: Längenverteilung nach Gruppen", 
+       x = "Länge (cm)", y = "Anzahl", fill = "BioGroup")
+
+# --- 3. Plot B: Längen-Gewichts-Beziehung ---
+p2 <- ggplot(data_ind, aes(x = Length_mid_cm, y = IndWgt)) +
+  geom_point(alpha = 0.05, size = 0.5, color = "grey30") +
+  # Manuelle Breaks für die Log-Achse
+  scale_x_log10(breaks = c(5, 10, 20, 30, 40, 50, 70), labels = c(5, 10, 20, 30, 40, 50, 70)) + 
+  scale_y_log10(breaks = c(10, 100, 500, 1000, 2000), labels = c(10, 100, 500, 1000, 2000)) +
+  geom_smooth(method = "lm", color = "red", linewidth = 0.8) +
+  annotate("label", x = 6, y = 1800, 
+           label = paste0("n = ", n_global, "\n", "a = ", a_lw, "\n", "b = ", b_lw, "\n", "R² = ", r2_lw),
+           hjust = 0, vjust = 1, size = 4, fill = "white", alpha = 0.8) +
+  theme_minimal() +
+  labs(title = "B: Längen-Gewichts-Beziehung (log-log)", 
+       x = "Länge (cm, log10)", 
+       y = "Gewicht (g, log10)")
+
+combined_plot12 <- p1 + p2
+combined_plot12
+```
+
+Die regressionsanalytische Auswertung der Längen-Gewichts-Beziehung über den gesamten Datensatz (siehe Abbildung 3B) zeigt mit einem Allometrieexponenten von b=`r b_lw` (R²=`r r2_lw`) ein nahezu ideales isometrisches Wachstum [@froese2006].
+
+Eine regionale Differenzierung (siehe Tabelle 3) bestätigt dieses Bild: Über alle Untersuchungsgebiete hinweg liegt der Exponent nahe dem Wert 3,0, sodass er nicht signifikant von der Isometrie abweicht. Somit ist die Anwendung des Konditionsfaktors nach Fulton (K) für die nachfolgende, nach biologischen Gruppen differenzierte Analyse methodisch abgesichert.
+
+```{r table_b_val, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 1. Berechnung der Parameter pro Region ---
+lw_regional_stats <- data_ind %>%
+  group_by(Region) %>%
+  summarise(
+    n = n(),
+    # Modell nur einmal pro Gruppe berechnen
+    mod = list(lm(log10(IndWgt) ~ log10(Length_mid_cm))),
+    # Werte aus dem Modell-Objekt extrahieren
+    b  = round(coef(mod[[1]])[2], 3),
+    a  = round(10^coef(mod[[1]])[1], 5),
+    r2 = round(summary(mod[[1]])$r.squared, 3),
+    .groups = "drop"
+  ) %>%
+  select(-mod) # Hilfs-Modell-Objekt wieder entfernen
+
+# --- 2. Ausgabe der Tabelle ---
+lw_regional_stats %>%
+  kable(caption = "<small><b>Tabelle 3:</b> Parameter der allometrischen Längen-Gewichts-Beziehung ($W = a \\cdot L^b$) nach Regionen.</small>",
+        col.names = c("Region", "n", "b", "a", "R²"),
+        align = "lrrrr",
+        escape = FALSE) %>%
+  # Styling der Tabelle
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = F, 
+                position = "center") %>%
+  column_spec(1, bold = TRUE) %>%
+  column_spec(3, bold = TRUE, background = "#f2f2f2")
+```
+
+### Zeitliche Entwicklung der Schollen-Kondition (K)
+
+```{r global_lm, echo=FALSE, results='hide'}
+# --- 1. Globales lineares Modell über alle Daten ---
+lm_k_global <- lm(K_Fulton ~ Year, data = data_ind)
+
+# --- 2. Modellbasierte Vorhersage-Werte ---
+k_global_pred_start <- predict(lm_k_global, newdata = data.frame(Year = min(data_ind$Year)))
+k_global_pred_end   <- predict(lm_k_global, newdata = data.frame(Year = max(data_ind$Year)))
+
+# --- 3.Statistiken ---
+k_global_decline_pct <- round(((k_global_pred_end - k_global_pred_start) / k_global_pred_start) * 100, 1)
+k_global_slope       <- round(coef(lm_k_global)[2], 5)
+k_global_r2          <- round(summary(lm_k_global)$r.squared, 3)
+k_global_p_val_raw   <- summary(lm_k_global)$coefficients[2,4]
+k_global_p_val       <- if_else(k_global_p_val_raw < 0.001, "< 0.001", as.character(round(k_global_p_val_raw, 3)))
+
+# --- 4.Ausgabe zur Kontrolle ---
+cat("Gesamtrückgang (modelliert):", k_global_decline_pct, "%\n")
+cat("Jährliche Rate (Slope):", k_global_slope, "\n")
+cat("R²:", k_global_r2,"\n")
+cat("p-Wert:", k_global_p_val,"\n")
+```
+
+Die regressionsanalytische Auswertung der Konditionswerte für den Gesamtzeitraum von 1994 bis 2024 verdeutlicht eine kontinuierliche Abnahme der Schollen-Kondition. Der Gesamtrückgang der Kondition wurde modellbasiert über die Regressionsgerade ermittelt und ergibt für die Jahre zwischen 1994 und 2024 eine signifikante Reduktion des Fulton-Index um 11,1 % (R²=0,036, p\<0,001). Diese Entwicklung ist in allen untersuchten Facetten – differenziert nach biologischer Gruppe und Quartal – statistisch hochsignifikant (siehe Abbildung 4).
+
+```{r plot_overall_trend, echo=FALSE, fig.width=12, fig.height=10,  fig.cap="<small>**Abbildung 4:** Detaillierte Trend-Statistik nach BioGruppen (1994-2024). Aggregierte Median-Werte mit linearer Regression pro Quartal und Gruppe. Source: ICES DATRAS Database (BITS Survey).</small>"}
+# --- 1. Statistik pro Facette berechnen (R² und p-Werte) ---
+k_seasonal_facets_stats <- data_ind %>%
+  group_by(BioGroup, Quarter) %>%
+  do(mod = lm(K_Fulton ~ Year, data = .)) %>%
+  mutate(
+    r2 = round(summary(mod)$r.squared, 3),
+    p_val = summary(mod)$coefficients[2,4],
+    # Formatierung des p-Wertes
+    p_label = if_else(p_val < 0.001, "p < 0.001", paste0("p = ", round(p_val, 3))),
+    label = paste0("R² = ", r2, "\n", p_label)
+  )
+
+# --- 2. Plot ---
+p3 <- ggplot(data_ind, aes(x = Year, y = K_Fulton, color = BioGroup)) +
+  # Median-Linie pro Jahr
+  stat_summary(fun = median, geom = "line", linewidth = 1.2) +
+  
+  # Regressionslinie
+  geom_smooth(method = "lm", color = "black", linetype = "dashed", linewidth = 0.6, se = FALSE) +
+  
+  # Statistische Labels (R² und p) oben links positionieren
+  geom_text(data = k_seasonal_facets_stats, 
+            aes(x = -Inf, y = Inf, label = label),
+            hjust = -0.1, vjust = 1.2, 
+            inherit.aes = FALSE, 
+            size = 4.5, 
+            fontface = "bold",
+            color = "grey20") +
+  facet_grid(BioGroup ~ Quarter, labeller = labeller(
+    Quarter = c(`1` = "Q1 (Frühjahr)", `4` = "Q4 (Herbst)"),
+    BioGroup = c("Female_Mature" = "Mature Females", "Males_Juveniles_Other" = "Males & Juveniles")
+  )) +
+  
+  # Styling & Farben
+  scale_color_brewer(palette = "Set1") +
+  theme_bw(base_size = 14) +
+  theme(
+    legend.position = "none", # Legende meist redundant durch Facets
+    strip.background = element_rect(fill = "grey98"),
+    strip.text = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(color = "grey30"),
+    plot.caption = element_text(size = 9, color = "grey30", face = "italic")
+  ) +
+  labs(
+    y = expression(bold("Median Kondition (K)")),
+    x = "Jahr"
+  )
+
+p3
+```
+
+**Saisonale Dynamik:** Die Analyse der einzelnen Quartale verdeutlicht eine ausgeprägte saisonale Variabilität. So liegt das Konditionsniveau im vierten Quartal (Herbst) systematisch höher als im ersten Quartal (Frühjahr). Während die jährlichen Mediane im Herbst Spitzenwerte von bis zu K=1,21 (Mature Females) erreichen, bewegen sich die Werte im Frühjahr in einer deutlich niedrigeren, gruppenübergreifenden Spanne zwischen K=0,85 (Minimum Males & Juveniles) und K=1,12 (Maximum Mature Females). Trotz dieser saisonalen Unterschiede verzeichnen beide Quartale über den gesamten Untersuchungszeitraum einen deutlichen Abwärtstrend, der sich im ersten Quartal besonders ausgeprägt zeigt (siehe Abbildung 4 und Tabelle 4).
+
+**Gruppenspezifische Beobachtung:** Den stärksten relativen Konditionsverlust verzeichnen die reifen Weibchen. Ihr modellierter Rückgang liegt zwischen 16,0 % (Q4) und 18,4 % (Q1). Damit ist ihre Verlustrate nahezu doppelt so hoch wie die der Männchen und Juvenilen, die im selben Zeitraum eine moderatere Abnahme von 10,0 % (Q2) bis 11,9 % (Q1) aufweisen. Letztere starteten bereits auf einem niedrigeren Ausgangsniveau und zeigen über die Jahre einen flacheren, wenngleich stetigen Abwärtstrend (siehe Abbildung 4 und Tabelle 4).
+
+```{r  seasonal_stats, echo=FALSE}
+# --- 1. Berechnung der zusammengefassten Statistik (Q1/Q4 & BioGroup) ---
+k_seasonal_stats <- data_ind %>%
+  group_by(BioGroup, Quarter) %>%
+  summarise(
+    n = n(),
+    # Lineares Modell berechnen
+    mod = list(lm(K_Fulton ~ Year)),
+    slope = round(coef(mod[[1]])[2], 5),
+    r2 = round(summary(mod[[1]])$r.squared, 3),
+    p_val_raw = summary(mod[[1]])$coefficients[2,4],
+    p_val = if_else(p_val_raw < 0.001, "< 0.001", as.character(round(p_val_raw, 3))),
+    
+    # Modellbasierter Rückgang (1994 bis 2024)
+    k_pred_start = predict(mod[[1]], newdata = data.frame(Year = min(data_ind$Year))),
+    k_pred_end   = predict(mod[[1]], newdata = data.frame(Year = max(data_ind$Year))),
+    k_decline_pct = round(((k_pred_end - k_pred_start) / k_pred_start) * 100, 1),
+    
+    # Biologische Eckpunkte (Reale jährliche Mediane)
+    k_max = round(max(aggregate(K_Fulton ~ Year, data = pick(everything()), median)$K_Fulton), 2),
+    k_min = round(min(aggregate(K_Fulton ~ Year, data = pick(everything()), median)$K_Fulton), 2),
+    .groups = "drop"
+  ) %>%
+  arrange(BioGroup, Quarter)
+
+# --- 2. Ausgabe als kable-Tabelle ---
+k_seasonal_stats %>%
+  mutate(
+    BioGroup = if_else(BioGroup == "Female_Mature", "Mature Females", "Males & Juveniles"),
+    Quarter = if_else(Quarter == 1, "Q1 (Frühjahr)", "Q4 (Herbst)")
+  ) %>%
+  select(BioGroup, Quarter, n, slope, r2, p_val, k_decline_pct, k_max, k_min) %>%
+  knitr::kable(
+    caption = "<small><b>Tabelle 4:</b> Zusammenfassende Statistik der Konditionsdynamik nach biologischen Gruppen und Quartalen (1994–2024). Der prozentuale Rückgang basiert auf der Modellvorhersage.</small>",
+    col.names = c("Gruppe", "Quartal", "n", "Slope", "R²", "p-Wert", "% Rückg.", "Max K", "Min K"),
+    align = "llrrrrrrr",
+    escape = FALSE
+  ) %>%
+  # Styling der Tabelle
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = F, 
+                position = "center") %>%
+  column_spec(1, bold = TRUE) %>%
+  column_spec(4, bold = TRUE, background = "#f2f2f2") %>% # Slope-Hervorhebung
+  column_spec(7, color = "white", background = "#d9534f", bold = TRUE) %>% # Rückgang hervorheben
+  footnote(symbol = "Modellbasierter Rückgang (vorhergesagter Wert 2024 vs. 1994).")
+```
+
+**Vergleich mit Referenzdaten**: Die ermittelten Ergebnisse stützen die Befunde von @froese2025, der für die Kieler Bucht einen Rückgang der Schollen-Kondition von 13,5 % (1991–2023) beschreibt. Die vorliegende Analyse bestätigt, dass es sich hierbei nicht um ein lokales Ereignis, sondern um einen großräumigen Trend handelt, der den gesamten Untersuchungsraum über drei Jahrzehnte hinweg prägt.
+
+### Räumliche Differenzierung der Schollen-Kondition (K)
+
+Der Internationale Rat für Meeresforschung (International Council for the Exploration of the Sea , ICES) unterteilt die Schollenbestände der Ostsee in zwei Managementeinheiten: den westlichen Bestand (SD 21–23, @ICES2022a) und den Bestand der südlichen/zentralen Ostsee (SD 24–32, @ICES2022b). Die folgende Analyse prüft, ob der insgesamt beobachtete negative Trend des Fulton-Konditionsfaktors in allen Subdivisionen gleichermaßen auftritt oder ob regionale Unterschiede bestehen.
+
+Abbildung 5 zeigt die räumliche Verteilung der Konditionswerte im Jahr 2024. Die interaktive Web-Applikation (siehe Kapitel 5) erlaubt zudem die Exploration aller Jahre seit 1994. Die Karte dient als Orientierung für die im Folgenden dargestellten regionalen Trends, aufgeschlüsselt nach biologischer Gruppe und Quartal.
+
+```{r plot_spatial_2024, echo=FALSE, fig.width=10, fig.height=8, fig.cap="<small>**Abbildung 5:** Räumliche Verteilung des medianen Konditionsfaktors (K) der Scholle im Untersuchungsgebiet für das Jahr 2024. Source: ICES DATRAS Database (BITS Survey).</small>"}
+# --- 1. Vorbereitung der Daten für das Jahr 2024 ---
+k_spatial_2024_df <- data_haul %>% 
+  filter(
+    Year == 2024,
+    Quarter %in% c(1, 4),
+    BioGroup %in% c("Female_Mature", "Males_Juveniles_Other")
+  )
+
+# --- 2. Plot ---
+p4 <- ggplot() +
+  # Hintergrundkarte (ICES Subdivisions)
+  geom_sf(data = ices_shape, fill = "grey90", color = "grey40", linewidth = 0.3) +
+  
+  # Datenpunkte (Hole)
+  geom_point(data = k_spatial_2024_df,
+             aes(x = HaulLong, y = HaulLat, color = median_K),
+             size = 2.5, alpha = 0.8) +
+  
+  # SD-Labels (SubDivisions)
+  geom_sf_label(data = ices_shape, aes(label = SubDivisio), 
+                size = 3, alpha = 0.4, nudge_x = -0.1) +
+  
+  # Farbskala (Magma-Viridis)
+  scale_color_viridis_c(option = "magma", direction = -1, name = "Median Kondition (K)") +
+  
+  # Faceting (Aufteilung nach Biogruppe und Quartal)
+  facet_grid(BioGroup ~ Quarter, labeller = labeller(
+    Quarter = c(`1` = "Q1 (Frühjahr)", `4` = "Q4 (Herbst)"),
+    BioGroup = c("Female_Mature" = "Mature Females", "Males_Juveniles_Other" = "Males & Juveniles")
+  )) +
+  
+  # Kartenausschnitt
+  coord_sf(xlim = c(9.5, 21.0), ylim = c(53.5, 58.5), expand = FALSE) +
+  
+  # Beschriftung
+  labs(x = "Longitude",
+       y = "Latitude") +
+  
+  # Design-Anpassungen
+  theme_bw(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    panel.grid = element_blank(),
+    strip.background = element_rect(fill = "grey98"),
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", size = 16),
+    legend.key.width = unit(1.5, "cm")
+  )
+
+p4
+```
+
+**Regionale Trends: Angleichung der Kondition auf niedrigem Niveau (1994–2024)**
+
+Eine differenzierte Betrachtung der Untersuchungsgebiete zeigt, dass sich die anfangs stark variierenden Konditionswerte im Laufe des Untersuchungszeitraums einem einheitlich niedrigeren Niveau angenähert haben. Auffällig ist dabei die zunehmende Angleichung der Kondition reifer Weibchen an das Niveau der Männchen und Juvenilen. In den nordwestlichen Gebieten mündet dies sogar in eine Umkehrung der Konditionshierarchie (siehe Abbildung 6 und Tabelle 5).
+
+```{r plot_regional_trends, echo=FALSE, fig.width=14, fig.height=14, message=FALSE, warning=FALSE, fig.cap="<small>**Abbildung 6:** Regionale Trends der Konditionsentwicklung (1994–2024). Dargestellt sind die jährlichen Mediane des Fulton-Index (K) getrennt nach dem westlichen Bestand (A: SD 21–23) sowie dem zentralen und südöstlichen Bestand (B: SD 24–26). Die farbigen Linien repräsentieren die linearen Regressionstrends für reife Weibchen (Mature Females) sowie Männchen und juvenile Fische (Males/Juv.). Source: ICES DATRAS Database (BITS Survey).</small>"}
+# --- 1. Hilfsfunktion für die Labels ---
+k_regional_facets_stats <- function(data) {
+  data %>%
+    group_by(Region, BioGroup) %>%
+    summarise(
+      r2 = round(summary(lm(K_Fulton ~ Year))$r.squared, 3),
+      p_val = summary(lm(K_Fulton ~ Year))$coefficients[2,4],
+      .groups = "drop"
+    ) %>%
+    mutate(
+      p_label = if_else(p_val < 0.001, "p < 0.001", paste0("p = ", round(p_val, 3))),
+      group_label = if_else(BioGroup == "Female_Mature", "Mature Females", "Males/Juv."),
+      label_text = paste0(group_label, ": R² = ", r2, " | ", p_label)
+    ) %>%
+    group_by(Region) %>%
+    summarise(final_label = paste(label_text, collapse = "\n"), .groups = "drop")
+}
+# --- 2. Daten filtern für die zwei Beständ ---
+k_df_west <- data_ind %>% filter(SubDivisio %in% c(21, 22, 23))
+k_df_east <- data_ind %>% filter(SubDivisio %in% c(24, 25, 26))
+
+# --- 3. Labels berechnen ---
+k_regional_facets_stats_west <- k_regional_facets_stats(k_df_west)
+k_regional_facets_stats_east <- k_regional_facets_stats(k_df_east)
+
+# --- 4. PLOT A: Westlicher Bestand ---
+p5 <- ggplot(k_df_west, aes(x = Year, y = K_Fulton, color = BioGroup, fill = BioGroup)) +
+  stat_summary(fun = median, geom = "point", size = 2, alpha = 0.4) +
+  geom_smooth(method = "lm", linewidth = 1.2, se = FALSE) + 
+  geom_text(data = k_regional_facets_stats_west, 
+          aes(x = -Inf, y = -Inf, label = final_label),
+          hjust = -0.05, 
+          vjust = -0.5, 
+          inherit.aes = FALSE, 
+          size = 3.5, 
+          fontface = "bold",
+          color = "grey20") +
+  facet_wrap(~Region, ncol = 3) +
+  coord_cartesian(ylim = c(0.75, 1.25)) +
+  scale_color_brewer(palette = "Set1") +
+  theme_bw(base_size = 14) +
+  theme(
+    aspect.ratio = 1,
+    legend.position = "bottom"
+  )+
+  labs(title = "A: Westlicher Bestand (SD 21-23)", 
+       y = "Median Kondition (K)", x = "Jahr")
+
+# --- 5. PLOT B: Zentraler/Südöstlicher Bestand  ---
+p6 <- ggplot(k_df_east, aes(x = Year, y = K_Fulton, color = BioGroup, fill = BioGroup)) +
+  stat_summary(fun = median, geom = "point", size = 2, alpha = 0.4) +
+  geom_smooth(method = "lm", linewidth = 1.2, se = FALSE) + 
+  geom_text(data = k_regional_facets_stats_east,
+          aes(x = -Inf, y = -Inf, label = final_label),
+          hjust = -0.05, 
+          vjust = -0.5, 
+          inherit.aes = FALSE, 
+          size = 3.5, 
+          fontface = "bold",
+          color = "grey20") +
+  facet_wrap(~Region, ncol = 3) +
+  coord_cartesian(ylim = c(0.75, 1.25)) +
+  scale_color_brewer(palette = "Set1") +
+  theme_bw(base_size = 14) +
+  theme(
+    aspect.ratio = 1, 
+    legend.position = "bottom"
+  ) +
+  labs(title = "B: Zentraler & Südöstlicher Bestand (SD 24-26)", 
+       y = "Median Kondition (K)", x = "Jahr")
+
+# --- 6. Plots kombinieren ---
+combined_plot56 <- p5 / p6 +          # Plots untereinander
+  plot_layout(guides = "collect") &   # Sammelt die Legende beider Plots
+  theme(legend.position = "bottom")
+
+combined_plot56
+```
+
+**A) Abnahme der regionalen Variabilität:** Zu Beginn des Untersuchungszeitraums wiesen die Regionen sehr unterschiedliche Ausgangswerte auf. Insbesondere Gebiete mit ursprünglich hoher Kondition verzeichneten die drastischsten Einbrüche. So sank beispielsweise in der Beltsee und der Kieler Bucht die modellierte Kondition der reifen Weibchen von einem hohen Ausgangsniveau um 28,9 %. Auch in der Südöstlichen Ostsee und im Arkona-Becken kam es zu massiven Rückgängen von über 22 %. Regionen, die bereits früh ein vergleichsweise niedriges Niveau aufwiesen, wie das Bornholm-Becken zeigten hingegen eine höhere zeitliche Konstanz (-4,0 % bis -5,4 %).
+
+**B) Konditions-Crossover im Nordwesten:** Das Kattegat und der Öresund nehmen eine Sonderstellung ein. Obwohl sie am Ende der Zeitreihe die vergleichsweise höchsten Konditionswerte aufweisen, ist die Dynamik hier besonders markant.
+
+-   Im Kattegat blieb die Kondition der Männchen und Juvenilen mit einem Anstieg von 2,5 % nahezu unverändert, während die Kondition der Weibchen mit einem Rückgang von 15,2 % erheblich sank, sodass es zu einem Crossover der Regressionstrends kam.
+
+-   Im Öresund zeigt sich ein ähnlicher Effekt: Der rechnerisch sehr steile Rückgang der reifen Weibchen (-24,2 %) führte dazu, dass deren ehemals erhöhte Kondition zum Ende der Zeitreihe unter das Niveau der Männchen fiel. Dieser steile Trend im Öresund ist jedoch vor dem Hintergrund einer lückenhafteren Datenlage vor dem Jahr 2010 zu interpretieren.
+
+```{r regional stats, echo=FALSE}
+# --- 1. Zusammenfassende Funktion für die Regionalstatistik ---
+k_regional_stats <- function(data) {
+  data %>%
+    group_by(Region, BioGroup) %>%
+    summarise(
+      n = n(),
+      # Lineares Modell & Regressionsparameter
+      mod = list(lm(K_Fulton ~ Year)),
+      slope = round(coef(mod[[1]])[2], 5),
+      r2 = round(summary(mod[[1]])$r.squared, 3),
+      p_val_raw = summary(lm(mod[[1]]))$coefficients[2,4],
+      p_val = if_else(p_val_raw < 0.001, "< 0.001", as.character(round(p_val_raw, 3))),
+      
+      # Vorhergesagte Werte der Regressionsgeraden
+      k_pred_start = predict(mod[[1]], newdata = data.frame(Year = min(data$Year))),
+      k_pred_end   = predict(mod[[1]], newdata = data.frame(Year = max(data$Year))),
+      # Prozentualer Rückgang basierend auf der Regressionsgeraden
+      k_decline_pct = round(((k_pred_end - k_pred_start) / k_pred_start) * 100, 1),
+      
+      # Biologische Eckpunkte
+      k_max = round(max(aggregate(K_Fulton ~ Year, data = pick(everything()), median)$K_Fulton), 2),
+      k_min = round(min(aggregate(K_Fulton ~ Year, data = pick(everything()), median)$K_Fulton), 2),
+      .groups = "drop"
+    )
+}
+
+# --- 2. Daten filtern für die zwei Bestände ---
+k_df_west <- data_ind %>% filter(SubDivisio %in% c(21, 22, 23))
+k_df_east <- data_ind %>% filter(SubDivisio %in% c(24, 25, 26))
+
+# --- 3. Statistiken berechnen ---
+k_regional_stats_west <- k_regional_stats(k_df_west)
+k_regional_stats_east <- k_regional_stats(k_df_east)
+k_regional_stats_all <- bind_rows(k_regional_stats_west, k_regional_stats_east)
+
+# --- 4. Tabellenausgabe ---
+k_regional_stats_all %>%
+  mutate(
+    BioGroup = if_else(BioGroup == "Female_Mature", "Mature Females", "Males/Juv.")
+  ) %>%
+  select(Region, BioGroup, n, slope, r2, p_val, k_decline_pct, k_max, k_min) %>%
+  knitr::kable(
+    caption = "<small><b>Tabelle 5:</b> Detaillierte Regressionsparameter und Konditionsextrema nach Regionen (1994–2024). Dargestellt sind der Stichprobenumfang, zeitlicher Slope, das Bestimmtheitsmaß R², die prozentuale Veränderung sowie die Spanne der jährlichen Mediane.</small>",
+    col.names = c("Region", "Gruppe", "n", "Slope", "R²", "p-Wert", "% Rückg.", "Max K", "Min K"),
+    align = "llrrrrrrrr",
+    escape = FALSE
+  ) %>%
+  # Tabellen Styling
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = F, 
+                position = "center",
+                font_size = 12) %>%
+  column_spec(1:2, bold = TRUE) %>%
+  column_spec(4, bold = TRUE, background = "#f2f2f2") %>%                   # Slope hervorgehoben
+  column_spec(7, 
+              color = "white", 
+              background = if_else(k_regional_stats_all$k_decline_pct < 0, "#d9534f", "#5cb85c"), 
+              bold = TRUE) %>%
+    pack_rows("Westlicher Bestand (SD 21-23)", 1, 6) %>%
+  pack_rows("Zentraler & Südöstlicher Bestand (SD 24-26)", 7, 12) %>%
+  footnote(symbol = "Modellbasierter Rückgang (vorhergesagter Wert 2024 vs. 1994).")
+```
+
+### Einfluss von Umwelt- und biologischen Faktoren
+
+Zur Einordnung der beobachteten Trends in einen breiteren ökologischen Kontext wurde die Rolle verschiedener Umweltvariablen und biologischer Parameter analysiert. Um diese komplexen Wechselwirkungen zu verstehen, wurde zunächst eine Spearman-Rangkorrelation durchgeführt (siehe Abbildung 7), welche es ermöglicht, auch nichtlineare, monotone Zusammenhänge zu identifizieren. Die Analyse wurde auf Basis der einzelnen Stationen durchgeführt (Haul-Ebene, n=5823).
+
+**Egebnisse der Korrelationsanalyse** (r~s~):
+
+-   Die **Bodentemperatur** zeigt mit einem moderaten positiven Koeffizienten von r~s~=0,41. die stärkste Korrelation zur Kondition der Scholle.
+
+-   **Salinität und Tiefe:** Der Salzgehalt (r~s~=0,02) sowie die Wassertiefe (r~s~=−0,10) weisen vernachlässigbare bis sehr schwache Korrelationen mit der Kondition auf. Zwischen dem Salzgehalt und der Schollendichte (CPUE) zeigt sich hingegen ein positiver Zusammenhang von r~s~=0,39.
+
+-   Hinsichtlich der **Bestandsdichten** zeigt der Konditionsfaktor über den gesamten Untersuchungszeitraum und alle Regionen hinweg vernachlässigbare globale lineare Zusammenhänge mit der Schollendichte (r~s~=−0,05) sowie keinerlei Korrelation mit der Abundanz großer Dorsche (r~s~=0,00).
+
+```{r spearman, echo=FALSE, fig.width=7, fig.height=6, out.width="90%", fig.cap="<small>**Abbildung 7:** Spearman-Rangkorrelationsmatrix der biologischen und abiotischen Parameter. Dargestellt sind die Korrelationskoeffizienten (rs) zwischen dem Konditionsfaktor (K), den Umweltvariablen (Temperatur, Salinität, Tiefe) und den relativen Abundanzen (CPUE) von Scholle und Dorsch. Die Farbskala indiziert die Richtung und Stärke des Zusammenhangs (Blau: positiv; Rot: negativ). Die Koeffizienten basieren auf Stations-Medianen (n=5.823).</small>"}
+# --- 1. Daten vorbereiten & Variablen umbenennen für den Plot ---
+cor_data <- data_haul %>%
+  select(
+    `Kondition (K)` = median_K, 
+    `Temperatur (°C)` = temp_bottom, 
+    `Salzgehalt (PSU)` = sal_bottom, 
+    `Tiefe (m)` = depth, 
+    `CPUE Scholle` = cpue_plaice, 
+    `CPUE Dorsch` = cpue_cod_large
+  ) %>%
+  drop_na()
+
+# --- 2. Spearman Matrix berechnen ---
+cor_matrix <- cor(cor_data, method = "spearman")
+
+# --- 3. Farbskala (Blau = Positiv, Rot = Negativ) ---
+col_palette <- colorRampPalette(c("#B2182B", "#F7F7F7", "#2166AC"))(200)
+
+# --- 4. Plot-Styling ---
+corrplot(cor_matrix, 
+         method = "color",          # Flächen füllen für bessere Lesbarkeit
+         type = "upper",            # Nur oberes Dreieck
+         order = "original",        # Reihenfolge wie im Select
+         addCoef.col = "black",     # Korrelationskoeffizienten in Schwarz
+         number.cex = 0.8,          # Schriftgröße der Zahlen
+         tl.col = "black",          # Achsenbeschriftung in Schwarz
+         tl.srt = 45,               # Text der Beschriftung um 45 Grad drehen
+         tl.cex = 1.1,              # Schriftgröße der Beschriftung
+         col = col_palette,         # Definierte Farbskala
+         diag = FALSE,              # Ohne 1er-Diagonale
+         mar = c(0,0,0,0),          # Definition der Ränder
+         cl.pos = "r",              # Farblegende rechts
+         cl.ratio = 0.15)           # Breite der Legende
+```
+
+**Analyse nicht-linearer Effekte (GAM)**
+
+Da die Rangkorrelation lediglich globale Trends über den gesamten Datenbereich zusammenfasst, ohne Schwankungen innerhalb der Parameter zu berücksichtigen, wurde zur Identifikation spezifischer ökologischer Schwellenwerte ein Generalisiertes Additives Modell (GAM) berechnet. Um die biologischen Messdaten der Schollen mit den Umweltbedingungen (die jeweils nur einmal pro Netzfang gemessen wurden) präzise abzugleichen, wurde die Analyse auf Basis der einzelnen Stationen durchgeführt (Haul-Ebene, n=5823). Dabei wurden die individuellen Fischdaten zu einem repräsentativen Durchschnittswert (Median) pro Station zusammengefasst.
+
+Das Modell erklärt 33,1 % der beobachteten Varianz (Deviance explained) und wurde mit folgender Struktur definiert:
+
+$$K \sim \text{BioGroup} + s(\text{Temperatur}) + s(\log\text{CPUE}_{\text{Scholle}}) + s(\text{Salz}) + s(\log\text{CPUE}_{\text{Dorsch}})$$
+
+Dabei steht $K$ für den Median-Konditionsfaktor pro Hol, `BioGroup` für einen parametrischen Faktor für Geschlecht und Reife und $s(…)$ für die glättenden Funktionen (Splines) der abiotischen und biotischen Prädiktoren. Auf die Aufnahme des Quartals als expliziter saisonaler Faktor wurde im finalen Modell verzichtet, da die saisonale Variabilität der Kondition maßgeblich durch die thermische Dynamik der Bodentemperatur determiniert wird und somit bereits indirekt im Modell abgebildet ist. Ebenso wurde auch auf die Aufnahme der Wassertiefe als Prädiktor verzichtet, da deren ökologischer Einfluss bereits über die korrelierten Parameter Salinität und Bodentemperatur vermittelt wird und kaum zusätzliche Varianz erklärt.
+
+```{r gam}
+# --- 1. Datenvorbereitung ---
+gam_model_df <- data_haul %>%
+  filter(!is.na(temp_bottom), !is.na(sal_bottom), !is.na(median_K)) %>%
+  mutate(
+    log_cpue_plaice = log10(cpue_plaice + 1),
+    log_cpue_cod = log10(cpue_cod_large + 1)
+  )
+
+# --- 2. Definition des Generalisierten Additiven Modells (GAM) ---
+gam_model <- gam(median_K ~ BioGroup + 
+                   s(temp_bottom, k = 10) + 
+                   s(log_cpue_plaice, k = 10) + 
+                   s(sal_bottom, k = 10) + 
+                   s(log_cpue_cod, k = 10), 
+                 data = gam_model_df)
+```
+
+```{r gam_summary_table, echo=FALSE, message=FALSE}
+# --- 1. GAM-Statistiken ---
+gam_results <- tidy(gam_model) %>%
+  mutate(
+    p.value = if_else(p.value < 0.001, "< 0.001 ***", as.character(round(p.value, 3))),
+    statistic = round(statistic, 2),
+    edf = round(edf, 2)
+  ) %>%
+  select(
+    `Einflussfaktor` = term, 
+    `edf` = edf, 
+    `F-Wert` = statistic, 
+    `p-Wert` = p.value
+  )
+
+# --- 2. Einflussfaktoren ---
+gam_results$Einflussfaktor <- c("Bodentemperatur", "Schollendichte (log)", "Salzgehalt", "Dorschdichte (log)")
+
+# --- 3. Tabellen-Ausgabe ---
+knitr::kable(gam_results, 
+             caption = "<b>Tabelle 7:</b> Statistische Ergebnistabelle der glättenden Terme (Splines) des GAM zur Erklärung der Schollenkondition (K). Dargestellt sind die effektiven Freiheitsgrade (edf), die F-Statistik und die p-Werte für jeden Prädiktor. Ein edf-Wert > 1 weist auf einen nicht-linearen Zusammenhang hin. Modellbasis: Stations-Mediane (n=5.823); erklärte Gesamtvarianz (Deviance explained) = 33,1 %.",
+             escape = FALSE) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = T)
+```
+
+Die Analyse der partiellen Effekte (siehe Tabelle 7 und Abbildung 9A–D) zeigt die individuellen Beiträge der Umwelt- und Bestandsparameter zur Schollenkondition, bereinigt um die Einflüsse der jeweils anderen Variablen.
+
+-   **A: Bodentemperatur:** Der partielle Effekt auf die Kondition zeigt nach einem vernachlässigbaren lokalen Maximum bei ca. 2 °C einen stetigen Anstieg bis zu einem Wert von etwa 12,5 °C. Oberhalb dieser Schwelle stagniert der Beitrag und weist bei hohen Temperaturen eine abnehmende Tendenz auf, wobei die Vertrauensintervalle aufgrund geringerer Datenabdeckung in diesem Bereich deutlich zunehmen. Dies deutet auf das Erreichen eines thermischen Optimums hin.
+
+-   **B: Bestandsdichte Scholle**: Bei geringen bis moderaten Abundanzen verläuft der Effekt nahezu neutral mit einer leicht abfallenden Tendenz. Ab einem Schwellenwert von ca. 160 Ind./h (Log10 ≈ 2,2) zeigt sich ein steiler Abfall des partiellen Effekts, was auf eine einsetzende negative Dichteabhängigkeit hi
+
+-   **C: Salzgehalt:** Die Kurve weist einen nicht-linearen Verlauf mit zwei lokalen Maxima bei ca. 10 PSU und 20 PSU auf. In extrem brackigen Bereichen (\< 8 PSU) sowie im intermediären Bereich zwischen den Peaks (ca. 12–16 PSU) ist der partielle Effekt auf die Kondition negativ ausgeprägt.
+
+-   **D: Bestandsdichte Dorsch (\> 35 cm):** Für die Abundanz großer Dorsche wird ein insgesamt positiver Trend abgebildet. Trotz eines wellenförmigen Verlaufs mit lokalen Schwankungen korrelieren höhere Dorschdichten systematisch mit einem positiven Beitrag zur Kondition der Scholle.
+
+```{r caption_gam, echo=FALSE}
+# --- 1. Caption für die nachfolgende Abbildung ---
+fig_9_cap <- paste0("<small>**Abbildung 9:** Partielle Effekt-Plots der glättenden Funktionen (Splines) des GAM-Modells für die Schollenkondition (K). Die y-Achsen zeigen den zentrierten partiellen Effekt der jeweiligen Prädiktoren auf die Zielvariable K. Die schattierten Bereiche repräsentieren das 95 %-Konfidenzintervall; die rote gestrichelte Linie markiert den Null-Effekt (kein Einfluss). Dargestellt sind: (A) die Bodentemperatur [°C], (B) die log-transformierte Schollendichte (CPUE), (C) die Bodensalinität [PSU] und (D) die log-transformierte Dorschdichte (> 35 cm). Analysebasis: Stations-Mediane (n=5.823). Source: ICES DATRAS Database (BITS Survey).</small>"
+  )
+```
+
+```{r gam_plot, echo=FALSE, message=FALSE, warning=FALSE, fig.width=12, fig.height=9, fig.cap=fig_9_cap}
+# --- 1. Datenvorbereitung ---
+gam_model_df <- data_haul %>%
+  filter(!is.na(temp_bottom), !is.na(sal_bottom), !is.na(median_K)) %>%
+  mutate(
+    log_cpue_plaice = log10(cpue_plaice + 1),
+    log_cpue_cod = log10(cpue_cod_large + 1)
+  )
+
+# --- 2. Modellierung ---
+gam_model <- gam(median_K ~ BioGroup +
+                   s(temp_bottom, k = 10) + 
+                   s(log_cpue_plaice, k = 10) + 
+                   s(sal_bottom, k = 10) + 
+                   s(log_cpue_cod, k = 10), 
+                 data = gam_model_df)
+
+# --- 3. Funktion zur einheitlichen Gestaltung ---
+style_gam_plot <- function(p, title, xlab) {
+  p + 
+    labs(title = title, x = xlab, y = "Partieller Effekt auf K") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha = 0.5) +
+    theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(face = "bold", size = 14),
+      axis.title = element_text(size = 12)
+    )
+}
+
+# --- 4. Extraktion und Styling der Plots ---
+raw_plots <- draw(gam_model, parametric = FALSE)
+
+p7 <- style_gam_plot(raw_plots[[1]], "A: Bodentemperatur", "Temperatur (°C)")
+p8 <- style_gam_plot(raw_plots[[2]], "B: Bestandsdichte: Pleuronectes platessa", "rel. Abundanzindex [Log10(CPUE + 1)]")
+p9 <- style_gam_plot(raw_plots[[3]], "C: Salzgehalt", "Salinität (PSU)")
+p10 <- style_gam_plot(raw_plots[[4]], "D: Bestandsdichte: Gadus morhua (>35cm)", "rel. Abundanzindex [Log10(CPUE + 1)]")
+
+# --- 5. Zusammenführung der Plots ---
+combined_plot78910 <- (p7 + p8) / (p9 + p10) + 
+  plot_annotation(
+    caption = paste0('Datenquelle: ICES DATRAS | n = ', nrow(gam_model_df), ' | Analyse: GAM (mgcv)'),
+    theme = theme(plot.title = element_text(size = 18, face = "bold", hjust = 0.5))
+  )
+
+combined_plot78910
+```
+
+## Diskussion
+
+**Datenbasis und methodische Validierung**
+
+Die vorliegende Analyse stützt sich auf einen Datensatz von über 80.000 Individuen, der die westliche und zentrale Ostsee über drei Jahrzehnte abdeckt.
+
+Ein zentrales methodisches Ergebnis dieser Arbeit ist der ermittelte Allometrieexponent von b≈3,0 (siehe Abbildung 3B und Tabelle 3). Dieser Wert deutet auf ein nahezu ideales isometrisches Wachstum hin [@froese2006], das heißt, *Pleuronectes platessa* behält ihre Körperform während des Wachstums proportional bei.
+
+Interessanterweise weichen diese Befunde von den lokalen Beobachtungen aus der Kieler Buch ab. Für diese wurde ein deutlich niedrigerer Exponent (b=2,7; R²=0,86) und eine damit verbundene Formveränderung der Scholle hin zu einer schlankeren Gestalt festgestellt [@froese2025].
+
+Die vorliegende Arbeit zeigt jedoch auf Basis einer wesentlich umfangreicheren und räumlich breiter gefassten Datenbasis (n=82.121), dass *P. platessa* in der Ostsee über das gesamte Größenspektrum hinweg eine hohe Formstabilität aufweist. Aufgrund der Robustheit dieser Ergebnisse ist davon auszugehen, dass die in kleineren Stichproben beobachteten Abweichungen möglicherweise durch lokale saisonale Effekte oder begrenzte Längenbereiche überlagert wurden, während der großräumige Trend in der Ostsee stabil isometrisch verläuft.
+
+**Zeitliche Dynamik: Ein kontinuierlicher Rückgang**
+
+Der modellierte Rückgang des Konditionsfaktors um 11,1 % seit 1994 ist das prägnanteste Ergebnis dieser Analyse. Da dieser Trend über alle Gruppen und Quartale hinweg hochsignifikant (p\<0.001) auftritt, liegt die Vermutung einer großräumigen ökologischen Veränderung im Ökosystem Ostsee nahe
+
+Die systematisch höheren Konditionswerte im vierten Quartal (Herbst) im Vergleich zum ersten Quartal (Frühjahr) spiegeln zunächst den natürlichen energetischen Jahreszyklus der Scholle wider [vgl. @rijnsdorp2004]. Nach der sommerlichen Hauptfraßperiode erreichen die Individuen im Herbst ein hohes Konditionsniveau. Während des Winters führt die Kombination aus reduzierter Nahrungsaufnahme und der energetisch kostenintensiven Gonadenentwicklung zu einer schrittweisen Zehrung der aufgebauten Reserven. Infolgedessen erreicht die Kondition im Frühjahr typischerweise ihren saisonalen Tiefpunkt [@rijnsdorp1989; @rijnsdorp2004]. Besorgniserregend ist jedoch, dass dieser natürliche saisonale Trend im ersten Quartal über den Untersuchungszeitraum von 30 Jahren signifikant weiter abgesunken ist (siehe Abbildung 4).
+
+Insbesondere bei reifen Weibchen, die mit bis zu 18,4 % die stärksten Verluste verzeichnen (siehe Tabelle 4), deutet dies auf eine zunehmende energetische Unterversorgung hin. Ein solches Defizit nach der winterlichen Zehrung kann die Reproduktionsleistung unmittelbar beeinträchtigen, da die Zahl der Eizellen (Fekundität) positiv mit der Kondition korreliert [@rijnsdorp1991]. Mögliche Folgen sind die Rückresorption von Eizellen (Atresie) oder ein vollständiger Ausfall des Laichgeschäfts (Skipped Spawning) [@morgan2004]. Somit stellt der beobachtete Konditionsrückgang ein potenzielles Risiko für den Rekrutierungserfolg der Ostseescholle dar.
+
+**Räumliche Variabilität: Habitatqualität und regionale Konvergenz**
+
+Die Analyse der Subdivisionen verdeutlicht, dass der Konditionsrückgang räumlich heterogen verläuft, was auf unterschiedliche regionale Belastungsgrenzen hindeutet. Gebiete wie die Beltsee (SD 22) und das Arkona-Becken (SD 24), die 1994 noch als vergleichsweise hochqualitative Habitate mit Spitzenwerten für reife Weibchen fungierten (K bis 1,25), verzeichneten mit bis zu 28,9 % die die stärksten relativen Abnahmen. Dies ist konsistent mit der Annahme, dass entweder die treibenden Umweltfaktoren hier besonders stark wirken oder die dortigen Bestände empfindlicher auf den Verlust optimaler Rahmenbedingungen reagieren. Verstärkt wird diese Annahme durch die ausgeprägte Standorttreue von *P. platessa*, wodurch die Art besonders anfällig für lokale Habitatveränderungen ist [@rosciszewski-dodgson2024]. Regionen mit ohnehin suboptimalen Umweltbedingungen, wie das Bornholm-Becken (SD 25), zeigen dagegen eine relative Stabilität auf niedrigem Niveau (−4,0 % bis −5,4 %). Dies könnte auf eine bereits erfolgte Anpassung an Stressfaktoren [vgl. @ulrich2013] oder das Erreichen eines physiologischen Minimums hindeuten, unterhalb dessen weitere Konditionsverluste nur begrenzt möglich sind. Beide Interpretationen bleiben jedoch spekulativ und bedürfen einer expliziten Prüfung.
+
+Ein besonderes Muster stellt das beobachtete Crossover der Regressionstrends im Kattegat und Öresund dar. Hier sank die Kondition reifer Weibchen unter das Niveau von Männchen und Juvenilen. Während letztere dort weiterhin vergleichsweise hohe Werte (K \> 1,0) aufweisen und im Kattegat sogar einen leichten Anstieg verzeichnen (+2,5 %), scheinen reife Weibchen überproportional betroffen zu sein. Da weibliche Schollen erhebliche energetische Ressourcen (bis zu 17 % des Körpergewichts) in die Gonadenentwicklung investieren [@rijnsdorp1989], könnten die erhöhten Reproduktionskosten unter sich verschlechternden Umweltbedingungen hier stärker ins Gewicht fallen als bei anderen Gruppen.
+
+Die räumlichen Muster weisen insgesamt auf eine weitgehende regionale Konvergenz der Konditionswerte auf niedrigem Niveau hin. Die vorliegenden Daten erlauben keine abschließende Klärung, welcher Faktor – eine Verschlechterung ehemals günstiger Habitate, physiologische Grenzen in bereits belasteten Regionen oder geschlechtsspezifische energetische Trade-offs – für die beobachtete Angleichung verantwortlich ist. Die Ergebnisse liefern jedoch konsistente Hinweise auf ein komplexes Zusammenspiel aus Habitatqualität, Umweltstressoren und reproduktionsbiologischen Anforderungen.
+
+**Umwelt- und Bestandsparameter**
+
+Um die räumlichen Muster und den Konditionsrückgang über die deskriptive Ebene hinaus einzuordnen, wurden potenzielle Mechanismen mittels Spearman-Rangkorrelation und Generalisierten Additiven Modellen (GAM) untersucht. Die Spearman-Rangkorrelation dient dazu, die generelle Stärke und Richtung globaler Prädiktoren zu identifizieren, während GAM eine differenzierte Betrachtung nichtlinearer Zusammenhänge sowie möglicher ökologischer Schwellenwerte erlaubt. Die folgenden Interpretationen sind als Hinweise auf potenzielle Wirkmechanismen zu verstehen, nicht als kausale Nachweise.
+
+**A) Bodentemperatur als zentraler Prädiktor**
+
+Die Spearman-Rangkorrelation identifiziert die Bodentemperatur (r~s~=0,41) als stärksten globalen Prädiktor. Die Analyse der partiellen Effekte im GAM verdeutlicht jedoch einen nichtlinearen Zusammenhang: Der positive Einfluss der Temperatur erreicht bei etwa 12,5 °C ein Maximum und stagniert bzw. sinkt darüber hinaus ab (siehe Abbildung 9A).
+
+Dieses Muster ist konsistent mit der Hypothese einer temperaturabhängigen metabolischen Kapazitätsgrenze. Es ist anzunehmen, dass steigende Temperaturen bis zum Optimum mit erhöhter Aktivität und effizienterer Nahrungsaufnahme einhergehen, jedoch oberhalb dieser Schwelle zu steigenden Erhaltungskosten und thermischem Stress führen [vgl. @kraskura2023]. Insbesondere für reife Weibchen, deren Energiebedarf zusätzlich durch die Gonadenentwicklung erhöht ist, könnte eine Überschreitung dieses Optimums zum beobachteten Konditionsrückgang beitragen.
+
+**B) Dichteabhängigkeit: Hinweise auf lokale Kapazitätsgrenzen**
+
+Während die globale Korrelation zwischen Kondition und Schollendichte vernachlässigbar ist (r~s~=−0,05), zeigt das GAM einen deutlichen Schwellenwert bei etwa 160 Ind./h. Oberhalb dieser Abundanz fällt der partielle Effekt steil ab (siehe Abbildung 9B)
+
+Dieses Muster deutet auf eine mögliche lokale Nahrungslimitierung bei sehr hohen Individuendichten hin und spricht für intraspezifische Konkurrenzprozesse bzw. dichteabhängige Wachstumseffekte [vgl. @vankooten2023]], die erst oberhalb einer bestimmten Abundanz wirksam werden. Die Ergebnisse unterstreichen, dass globale Korrelationsmaße lokale, nichtlineare Effekte maskieren können.
+
+**C) Salinität und physiologische Limitierungen**
+
+Der nichtlineare Verlauf des partiellen Effekts der Salinität mit negativen Werten in stark brackigen Bereichen (\< 8 PSU; siehe Abbildung 9C) ist mit bekannten osmoregulatorischen Belastungen mariner Flachwasserfische vereinbar [vgl. @rosciszewski-dodgson2024; @rau2019; @wallin2014].
+
+Die dauerhaft niedrige Kondition im Bornholm-Becken (SD 25) könnte somit teilweise mit den dort vorherrschenden niedrigen Salzgehalten zusammenhängen. Ob die beobachteten Effekte primär auf direkte physiologische Kosten der Osmoregulation oder indirekt auf Veränderungen in der Nahrungsverfügbarkeit zurückzuführen sind, bleibt jedoch offen und erfordert eine explizite standortspezifische Analyse der Umweltentwicklung.
+
+**D) Rolle des Dorsches**
+
+Der positive Zusammenhang zwischen der Abundanz großer Dorsche (\> 35 cm) und der Kondition der Scholle erscheint zunächst kontraintuitiv (siehe Abbildung 9C).
+
+Der Atlantische Dorsch (*Gadus morhua*) fungiert in der westlichen Ostsee als Top-Prädator und kann potenziell regulierend auf Plattfischbestände wirken. Der beobachtete positive Trend könnte entweder auf indirekte dichteabhängige Effekte (z. B. Reduktion innerartlicher Konkurrenz durch Prädation) oder auf gemeinsame Reaktionen beider Arten auf günstige Habitatbedingungen hinweisen, wobei das Vorkommen größerer Dorschindividuen als Indikator für insgesamt produktivere bzw. strukturell intaktere Systeme interpretiert werden kann [vgl. @neuenfeldt2020]. Eine eindeutige mechanistische Zuordnung ist auf Grundlage der vorliegenden Daten jedoch nicht möglich.
+
+## Fazit und Ausblick
+
+Die vorliegende Analyse belegt auf Grundlage eines drei Jahrzehnte umfassenden Datensatzes einen signifikanten, großräumigen und geschlechtsspezifischen Rückgang der Kondition von Pleuronectes platessa in der westlichen und zentralen Ostsee. Seit 1994 sank der modellierte Fulton-Konditionsfaktor im Mittel um 11,1 %, bei reifen Weibchen sogar um bis zu 18,4 %. Parallel dazu zeigt sich eine zunehmende regionale Angleichung des Konditionsfaktors auf niedrigem Niveau.
+
+Besonders hervorzuheben ist das beobachtete „Crossover-Phänomen“ im Kattegat und Öresund, bei dem reife Weibchen am Ende der Zeitreihe eine geringere Kondition aufweisen als Männchen und Juvenile. Dieses Muster deutet auf eine wachsende energetische Belastung reproduktiver Individuen hin und verweist auf mögliche metabolische Kapazitätsgrenzen unter veränderten Umweltbedingungen.
+
+Die Modellanalysen identifizieren Bodentemperatur, Dichteabhängigkeit und Salinität als zentrale Einflussfaktoren und weisen auf ökologische Schwellenwerte hin. Gleichzeitig bleibt die erklärte Varianz begrenzt, was auf zusätzliche, bislang nicht erfasste Mechanismen hindeutet.
+
+Zukünftige Arbeiten sollten daher (a) die zeitliche Entwicklung der Umweltparameter explizit integrieren, (b) regionale Habitatveränderungen unter Einbezug konkreter physikalisch-biogeochemischer Prozesse analysieren und (c) energetische Kenngrößen in populationsdynamische Modelle einbinden. Eine Verknüpfung von Konditionsindizes mit Rekrutierungsdaten könnte helfen, die funktionale Bedeutung der beobachteten Trends für die Resilienz des Bestandes quantifizierbar zu machen.
+
+Insgesamt ergibt sich das Bild eines Bestandes von *Pleuronectes platessa* in der westlichen und zentralen Ostsee, der weiterhin ein annähernd isometrisches Längen-Gewichts-Wachstum aufweist, dessen energetische Spielräume jedoch zunehmend eingeschränkt sind. Die beobachteten Konditionsverluste – insbesondere bei reifen Weibchen – sind fischereibiologisch relevant, da sie potenziell die Reproduktionsleistung und damit die Rekrutierungsdynamik beeinflussen können.
+
+Die zukünftige Entwicklung dieses Trends wird maßgeblich von der Entwicklung der Umweltbedingungen, ökologischen Wechselwirkungen und anthropogenen Einflüssen in der Ostsee abhängen.
+
+------------------------------------------------------------------------
+
+**Interaktive Anwendung**: Um die in dieser Arbeit beschriebenen komplexen räumlichen und zeitlichen Interaktionen greifbar zu machen, wurde eine interaktive Web-Applikation entwickelt: [Baltic-Plaice-Condtion-Analysis](https://tpool44.shinyapps.io/baltic_plaice_condition_analysis/). Diese erlaubt es Anwendern, die Trends für spezifische Subdivisionen, Quartale und biologische Gruppen individuell zu justieren.
+
+**Grafik-Export**: In Ergänzung zum schriftlichen Bericht wurden alle visualisierten Analysen automatisiert im Verzeichnis `/output` hinterlegt. Dieser Export gewährleistet, dass sämtliche Abbildungen (p1–p10) in hoher Auflösung vorliegen.
+
+```{r export-grafiken-final, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 1. Sicherstellen, dass der Output-Ordner existiert ---
+if (!dir.exists("output")) dir.create("output")
+
+# --- 2. Zentraler Speicherbefehl ---
+ggsave("output/Laengen_Gewichts_Analyse_Gesamt.png", combined_plot12, width = 12, height = 6)
+ggsave("output/Zeitlicher_Trend_overall.png", p3, width = 12, height = 10)
+ggsave("output/Spatial_Distribution_2024.png", p4, width = 12, height = 10)
+ggsave("output/Zeitlicher_Regionaler_Trend.png", combined_plot56, width = 14, height = 14)
+ggsave("output/GAM_Umweltfaktoren.png", combined_plot78910, width = 12, height = 9)
+```
+
+## Hilfsmittel und KI-Deklaration {.unnumbered}
+
+Bei der Erstellung der vorliegenden Arbeit wurden die folgenden digitalen Hilfsmittel zur Unterstützung eingesetzt:
+
+-   **Google Gemini (Google, DeepMind)**: Unterstützung bei der Erstellung, Optimierung und Fehlersuche des R-Codes sowie bei der Formatierung des R-Markdown-Dokuments. Darüber hinaus wurde das Tool insbesondere für die konzeptionelle Strukturierung und den modularen Aufbau der entwickelten Shiny-App verwendet.
+
+-   **ChatGPT (OpenAI)**: Unterstützung bei der Strukturierung von Code-Abschnitten sowie bei der technischen Dokumentation im Rahmen des R-Markdown-Dokuments.
+
+-   **DeepL Write (DeepL SE):** Punktueller Einsatz zur stilistischen Feinabstimmung von Formulierungen und zur Verbesserung der sprachlichen Klarheit.
+
+**Hinweis zur Eigenleistung**: Sämtliche KI-gestützten Hilfsmittel wurden lediglich als technisches oder sprachliches Werkzeug verwendet. Die Auswahl der statistischen Methoden, die Interpretation der Ergebnisse sowie die inhaltliche Endkontrolle und Verantwortung liegen vollständig beim Autor.
+
+## Literatur {.unnumbered}
