@@ -22,11 +22,11 @@ standardize_length <- function(df) {
     mutate(
       # Klassenbreite in cm bestimmen
       ClassWidth_cm = case_when(
-        LngtCode == "." ~ 0.1,  # 1 mm class → 0.1 cm
-        LngtCode == "0" ~ 0.5,  # 0.5 cm class → 0.5 cm
-        LngtCode == "1" ~ 1,    # 1 cm class → 1 cm
-        LngtCode == "2" ~ 2,    # 2 cm class → 2 cm
-        LngtCode == "5" ~ 5,    # 5 cm class → 5 cm
+        LngtCode == "." ~ 0.1,  # 1 mm
+        LngtCode == "0" ~ 0.5,  # 5 mm
+        LngtCode == "1" ~ 1,    # 1 cm
+        LngtCode == "2" ~ 2,    # 2 cm
+        LngtCode == "5" ~ 5,    # 5 cm
         TRUE ~ NA_real_
       ),
       
@@ -57,15 +57,12 @@ plaice_counts <- HL %>%
   group_by(Survey, Year, Quarter, Country, Ship, Gear, HaulNo) %>%
   summarise(Total_Plaice_Count = sum(HLNoAtLngt, na.rm = TRUE), .groups = "drop")
 
-
-
-
 # 3. RÄUMLICHE ZUORDNUNG --------------------------------------------------
 # HH Datensatz bereinigen
 HH <- HH %>%
   filter(
-    HaulVal == "V",                 # Nur valide Hols
-    !is.na(HaulDur), HaulDur >= 10, # Mindestens 10 Min (Festlegung)
+    HaulVal == "V",                   # Nur valide Hols
+    !is.na(HaulDur), HaulDur >= 10,   # Mindestens 10 Min (Festlegung)
     !is.na(HaulLat), !is.na(HaulLong) # Keine NAs in Koordinaten
   )
 
@@ -81,7 +78,7 @@ hauls_sf <- HH %>%
     # Umweltdaten
     Depth, SurTemp, BotTemp, SurSal, BotSal
   ) %>%
-  distinct() %>% # Dubletten entfernen
+  distinct() %>% 
   # In sf-Objekt umwandeln (Simple Features)
   st_as_sf(coords = c("HaulLong", "HaulLat"), crs = 4326, remove = FALSE)
 
@@ -128,7 +125,6 @@ CA_meta <- CA %>%
   )) %>%
   # Ausreißerbereinigung pro Jahr, Quartal und Gruppe:
   # Ausreißer werden entfernt, wenn sie >3 Standardabweichungen vom vorhergesagten Gewicht abweichen
-  # 3rd Standard Deviation Regel auf Basis der Log-Log Regression
   group_by(Year, Quarter, BioGroup) %>%
   filter(n() > 5) %>%  # Mindestanzahl für statistische Belastbarkeit
   mutate(
@@ -150,8 +146,8 @@ CA_meta <- CA %>%
   mutate(Region = case_when(
     SubDivisio == "20" ~ "Skagerrak", 
     SubDivisio == "21" ~ "Kattegat",
-    SubDivisio == "23" ~ "Öresund", # Geografisch zwischen Kattegat und Arkona
     SubDivisio == "22" ~ "Beltsee & Kieler Bucht", 
+    SubDivisio == "23" ~ "Öresund", 
     SubDivisio == "24" ~ "Arkona-Becken",
     SubDivisio == "25" ~ "Bornholm-Becken", 
     SubDivisio == "26" ~ "Südöstliche Ostsee", 
@@ -160,12 +156,11 @@ CA_meta <- CA %>%
   )) %>%
   # Geografische Sortierung von West nach Ost (Faktor)
   mutate(Region = factor(Region, levels = c(
-    "Skagerrak", "Kattegat", "Öresund", "Beltsee & Kieler Bucht",
+    "Skagerrak", "Kattegat", "Beltsee & Kieler Bucht", "Öresund",
     "Arkona-Becken", "Bornholm-Becken", "Südöstliche Ostsee",
     "Nördliche Zentrale Ostsee"
   ))) %>%
   filter(!is.na(Region)) # Nur Fische aus Zielgebieten
-
 
 # 5. AGGREGATION FÜR KARTE & CPUE-ANALYSEN ----------------------------
 # Zusammenfassung der Daten auf Haul-Ebene
@@ -173,17 +168,16 @@ map_data_all <- CA_meta %>%
   group_by(Year, Quarter, Region, SubDivisio, BioGroup, HaulLat, HaulLong, HaulNo) %>%
   summarise(
     median_K = median(K_Fulton, na.rm = TRUE),
-    n_plaice_measured = n(),                       # Anzahl gemessener Schollen im Hol
+    n_plaice_measured = n(),               # Anzahl gemessener Schollen im Hol
     cpue_plaice = mean(CPUE_Plaice),       # Dichte Scholle
     cpue_cod_large = mean(CPUE_Cod_Large), # Dichte Dorsch (>35cm)
     temp_bottom = mean(BotTemp),           # Umweltparameter
-    sal_bottom = mean(BotSal),
-    depth = mean(Depth),
+    sal_bottom = mean(BotSal),             # Umweltparameter
+    depth = mean(Depth),                   # Umweltparameter
     .groups = "drop"
   ) %>%
   # Bereinigung von statistischen Artefakten (NaN zu NA)
   mutate(across(where(is.numeric), ~ ifelse(is.nan(.), NA, .)))
-
 
 # 6. EXPORT DER RDS-DATEIEN -----------------------------------------------
 # Einzelfisch-Daten: Für Boxplots, Zeitreihen und Regressionen

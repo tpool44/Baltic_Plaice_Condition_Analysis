@@ -1,42 +1,146 @@
+# LIBRARIES
 library(shiny)
 library(tidyverse)
 library(sf)
 library(shinythemes)
 library(viridis)
+library(DT)   
+library(broom)
+library(mgcv)      
+library(gratia)    
+library(patchwork) 
+
+# GLOBALE OPTIONEN 
+options(OutDec = ",")                # Komma als Dezimaltrenner
+options(timeout = 600)               # Erhöht Timeout für Uploads (10 Min statt 1 Min)
+options(rsconnect.http.timeout = 60) # Speziell für shinyapps.io Uploads
 
 # --- DATEN LADEN & VORBEREITUNG ---
-CA_meta    <- readRDS("data/plaice_app_data.rds") 
-map_data   <- readRDS("data/map_data_all.rds")
-ICES_light <- readRDS("data/ices_shape_light.rds") %>% st_transform(4326)
+data_ind <- readRDS("output/plaice_individual_data.rds")
+data_haul <- readRDS("output/plaice_haul_aggregated.rds")
+ices_shape <- readRDS("output/ices_shape_light.rds")
 
 # Ordnung der Regionen festlegen (West -> Ost)
-region_levels <- c("Skagerrak", "Kattegat", "Öresund", "Kieler Bucht", 
-                   "Arkona-Becken", "Bornholm-Becken", "Östlich von Bornholm")
-CA_meta$Region <- factor(CA_meta$Region, levels = region_levels)
+region_levels <- c(  "Skagerrak", "Kattegat", "Beltsee & Kieler Bucht", "Öresund",
+                     "Arkona-Becken", "Bornholm-Becken", "Südöstliche Ostsee")
 
+data_ind$Region <- factor(data_ind$Region, levels = region_levels)
 
 lon_min <- 9.5; lon_max <- 21.0
 lat_min <- 53.5; lat_max <- 58.5
 
+style_gam_plot <- function(p, title, xlab) {
+  p + 
+    labs(title = title, x = xlab, y = "Partieller Effekt auf K") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha = 0.5) +
+    theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(face = "bold", size = 14),
+      axis.title = element_text(size = 12)
+    )
+}
+
 # 2. UI (USER INTERFACE) --------------------------------------------------
 ui <- navbarPage(
-  title = "ConditionPlaice",
+  title = tags$a(
+    href = "#",
+    onclick = "if(typeof(nav) !== 'undefined') { $('.navbar-nav a[data-value=\"Dashboard\"]').click(); }",
+    style = "text-decoration: none; color: inherit; cursor: pointer; display: flex; align-items: center; height: auto; padding: 0;",
+    
+    tags$img(
+      src = "logo.png", 
+      style = "height: 38px; width: auto; margin-right: 12px; border-radius: 50%; vertical-align: middle;"
+    ), 
+    
+    div(
+      style = "display: flex; flex-direction: column; justify-content: center; line-height: 1.2;",
+      div( # Container für Name + Beta in einer Zeile
+        style = "display: flex; align-items: center;",
+        span("ConditionPlaice", 
+             style = "font-size: 17px; font-weight: bold; white-space: nowrap;"),
+        span("BETA", 
+             style = "font-size: 9px; background-color: #f39c12; color: white; padding: 1px 5px; 
+                border-radius: 3px; margin-left: 8px; font-weight: 800; letter-spacing: 0.5px;")
+      ),
+      tags$small(
+        style = "font-size: 10px; color: #bdc3c7; font-weight: normal; margin-top: 2px;", 
+        "powered by Flatfish Lab"
+      )
+    )
+  ),
+  id = "nav",
   theme = shinytheme("flatly"),
   
   header = tags$head(
     tags$style(HTML("
-      .well { background-color: #ffffff !important; border-radius: 8px !important; box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important; border: 1px solid #e3e6f0 !important; }
-      .shiny-output-error { visibility: hidden; }
+      /* --- HEADER & NAVBAR FIXES --- */
+      .navbar { min-height: 65px !important; }
+      
+      .navbar-brand { 
+        height: 65px !important; 
+        display: flex !important; 
+        align-items: center !important; 
+        padding-top: 0 !important; 
+        padding-bottom: 0 !important; 
+      }
+      
+      /* Tabs ebenfalls vertikal mittig ausrichten */
+      .navbar-nav > li > a { 
+        padding-top: 22px !important; 
+        padding-bottom: 22px !important; 
+        line-height: 21px !important;
+      }
+
+      /* --- GITHUB CORNER FIX (Wieder sichtbar machen) --- */
+      .github-corner { 
+        position: absolute; 
+        top: 0;                /* Basis oben */
+        right: 0; 
+        height: 65px;          /* Gleiche Höhe wie Navbar */
+        display: flex !important; 
+        align-items: center !important; 
+        z-index: 9999 !important; /* Erzwingt Sichtbarkeit über allen Layern */
+        padding-right: 25px; 
+      }
+      
+      .github-corner a { 
+        color: #ecf0f1 !important; 
+        text-decoration: none !important; 
+        font-weight: 500;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+      }
+      
+      .github-corner a:hover { color: #3498db !important; }
+
+      /* --- DEIN BESTEHENDES STYLING --- */
+      .well { background-color: #ffffff !important; border-radius: 8px !important; 
+              box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important; border: 1px solid #e3e6f0 !important; }
+      
       .main-header { font-weight: bold; color: #2c3e50; border-bottom: 2px solid #3498db; margin-bottom: 15px; }
+      
+      .shiny-output-error { visibility: hidden; }
+      
       .kpi-box { text-align: center; padding: 10px; border-right: 1px solid #eee; }
       .kpi-box:last-child { border-right: none; }
-      .kpi-title { font-size: 0.8em; color: #7f8c8d; text-transform: uppercase; font-weight: bold; }
-      .kpi-value { font-size: 1.5em; font-weight: bold; margin-top: 5px; }
-    "))
+      .kpi-title { font-size: 0.85em; color: #7f8c8d; text-transform: uppercase; font-weight: bold; }
+      .kpi-value { font-size: 1.5em; font-weight: bold; color: #2c3e50; margin-top: 5px; }
+      
+      .table-header-styled { color: #e74c3c; text-decoration: underline; font-weight: bold; }
+    ")),
+    
+    # Der Container für den GitHub-Link
+    # GitHub Link Container mit Leerzeichen-Fix
+    tags$div(class = "github-corner",
+             tags$a(href = "https://github.com/tpool44/Baltic_Plaice_Condition_Analysis", 
+                    target = "_blank", 
+                    icon("github"), 
+                    HTML("&nbsp;"), "GitHub")) # HTML("&nbsp;") fügt das Leerzeichen ein
   ),
-  
   # --- TAB 1: DASHBOARD ---
-  tabPanel("Dashboard",
+  tabPanel("Dashboard", icon = icon("map"),
            fluidPage(
              # Obere KPI-Leiste
              fluidRow(
@@ -48,13 +152,15 @@ ui <- navbarPage(
                              h3(textOutput("sample_n"), style="margin:5px 0; color: #18bc9c; font-weight: bold;")))
              ),
              
-             # Das 3-Spalten-Layout
+             # 3-Spalten-Layout
              fluidRow(
-               # 1. SPALTE: STEUERUNG
+               # 1. SPALTE: EINSTELLUNGEN
                column(2,
                       div(class="well",
-                          h4("Filter", class="main-header"),
-                          sliderInput("year_dash", "Zeitraum:", 1994, 2024, 2024, sep = ""),
+                          h4("Einstellungen", class="main-header"),
+                          selectInput("year_dash", "Jahr auswählen:", 
+                                      choices = sort(unique(data_ind$Year), decreasing = TRUE), 
+                                      selected = 2024),
                           checkboxGroupInput("qs_dash", "Quartale:", 
                                              choices = c("Q1 (Frühjahr)" = 1, "Q4 (Herbst)" = 4), selected = c(1, 4)),
                           checkboxGroupInput("groups_dash", "Biogruppen:", 
@@ -67,7 +173,7 @@ ui <- navbarPage(
                           p("Data Source:", style="font-weight: bold; margin-bottom: 2px; font-size: 0.85em;"),
                           p(
                             "ICES Database of Trawl Surveys (",
-                            tags$a(href = "https://datras.ices.dk/WebServices/Webservices.aspx", 
+                            tags$a(href = "https://www.ices.dk/data/data-portals/Pages/DATRAS.aspx", 
                                    "DATRAS", target = "_blank", style = "color: #3498db; text-decoration: underline;"),
                             "), BITS Survey.", 
                             style="font-size: 0.75em; color: #7f8c8d;"
@@ -89,129 +195,174 @@ ui <- navbarPage(
                           h4("Details", class="main-header"),
                           tableOutput("stats_table_detailed"),
                           hr(),
-                          helpText("Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor.")
+                          p("Der Fulton-Konditionsfaktor (K) dient in der Fischereibiologie als Proxy für den Ernährungszustand oder für das allgemeine Wohlbefinden eines Fisches.", 
+                            style="font-size: 0.9em;"),
+                          tags$ul(style="font-size: 0.85em; color: #7f8c8d;",
+                                  tags$li("Werte > 1.2: Sehr gute Kondition"),
+                                  tags$li("Werte ≈ 1.0: Normale (gute) Kondition")),
                       )
                )
-             ) # Ende fluidRow Dashboard
-           ) # Ende fluidPage Dashboard
-  ), # Ende tabPanel Dashboard
+             )
+           )
+  ),
   
-  # --- TAB 2: EXPLORATIVE STATISTIK ---
-  # --- TAB 2: EXPLORATIVE STATISTIK (UI) ---
-  tabPanel("Explorative Statistik",
-           sidebarLayout(
-             sidebarPanel(
-               width = 3,
-               # Selektor für den Grafiktyp (Gilt für beide Unter-Tabs)
-               h4("Analyse-Modus", class = "main-header"),
-               selectInput("plot_type_exp", "Grafiktyp wählen:",
-                           choices = c("Zeitlicher Trend (Linie)" = "line", 
-                                       "Verteilung (Boxplot)" = "box",
-                                       "Platzhalter" = "lw")),
-               hr(),
-               
-               conditionalPanel(
-                 condition = "input.explorativ_tabs == 'Overall Trend'",
-                 h4("Filter", class = "main-header"),
-                 sliderInput("year_range_overall", "Zeitraum:", 1994, 2024, c(1994, 2024), sep = ""),
-                 checkboxGroupInput("qs_overall", "Quartale:", 
-                                    choices = c("Q1 (Frühjahr)" = 1, "Q4 (Herbst)" = 4), selected = c(1, 4)),
-                 checkboxGroupInput("groups_overall", "Biogruppen:", 
-                                    choices = c("Mature Females" = "Female_Mature", "Males & Juveniles" = "Males_Juveniles_Other"),
-                                    selected = c("Female_Mature", "Males_Juveniles_Other"))
-               ),
-               
-               conditionalPanel(
-                 condition = "input.explorativ_tabs == 'Regionale Analyse'",
-                 h4("Filter", class = "main-header"),
-                 checkboxGroupInput("regions_exp", "Regionen:", 
-                                    choices = region_levels, 
-                                    selected = c("Kieler Bucht", "Arkona-Becken", "Bornholm-Becken")),
-                 checkboxGroupInput("qs_exp", "Quartale:", 
-                                    choices = c("Q1 (Frühjahr)" = 1, "Q4 (Herbst)" = 4), selected = c(1, 4)),
-                 checkboxGroupInput("groups_exp", "Biogruppen:", 
-                                    choices = c("Mature Females" = "Female_Mature", "Males & Juveniles" = "Males_Juveniles_Other"),
-                                    selected = c("Female_Mature", "Males_Juveniles_Other"))
-               )
+  # --- TAB 2: ANALYSE & STATISTIK ---
+  navbarMenu("Analyse & Statistik", icon = icon("chart-line"),
+             
+             # --- UNTERSEITE 1: ZEITLICHE TRENDS ---
+             tabPanel("Zeitliche Trends",
+                      sidebarLayout(
+                        sidebarPanel(width = 3,
+                                     h4("Einstellungen", class="main-header"),
+                                     selectInput("plot_type_overall", "Grafiktyp auswählen:", 
+                                                 choices = c("Trendlinie" = "line", "Boxplots" = "box")),
+                                     hr(),
+                                     sliderInput("year_range_overall", "Zeitraum auswählen:", 1994, 2024, c(1994, 2024), sep = ""),
+                                     checkboxGroupInput("qs_overall", "Quartale:", 
+                                                        choices = c("Q1 (Frühjahr)" = 1, "Q4 (Herbst)" = 4), selected = c(1, 4)),
+                                     checkboxGroupInput("groups_overall", "Biogruppen:", 
+                                                        choices = c("Mature Females" = "Female_Mature", 
+                                                                    "Males & Juveniles" = "Males_Juveniles_Other"), 
+                                                        selected = c("Female_Mature", "Males_Juveniles_Other")),
+                                     hr(),
+                                     p("Data Source:", style="font-weight: bold; margin-bottom: 2px; font-size: 0.85em;"),
+                                     p(
+                                       "ICES Database of Trawl Surveys (",
+                                       tags$a(href = "https://www.ices.dk/data/data-portals/Pages/DATRAS.aspx", 
+                                              "DATRAS", target = "_blank", style = "color: #3498db; text-decoration: underline;"),
+                                       "), BITS Survey.", 
+                                       style="font-size: 0.75em; color: #7f8c8d;")
+                        ),
+                        mainPanel(width = 9, 
+                                  uiOutput("stats_overall_bar"),
+                                  div(class="well", plotOutput("plot_overall", height = "650px")))
+                      )
              ),
              
-             mainPanel(
-               width = 9,
-               tabsetPanel(id = "explorativ_tabs",
-                           tabPanel("Overall Trend", 
-                                    uiOutput("stats_overall_bar"),
-                                    div(class="well", plotOutput("plot_overall", height = "600px"))),
-                           tabPanel("Regionale Analyse", 
-                                    uiOutput("stats_regional_bar"),
-                                    div(class="well", plotOutput("plot_regional", height = "750px")))
-               )
-             )
-           )
-  ),
-  # --- TAB 3: TROPHISCHE INTERAKTIONEN & UMWELT ---
-  tabPanel("Trophische Interaktionen",
-           sidebarLayout(
-             sidebarPanel(
-               width = 3,
-               h4("Filter", class="main-header"),
-               radioButtons("trophic_mode", "Modus wählen:",
-                            choices = c("Dichte-Effekte (Karten)" = "density", 
-                                        "Umwelt-Korrelationen" = "env")),
-               hr(),
-               sliderInput("year_trophic", "Zeitraum:", 1994, 2024, 2024, sep = ""),
-               checkboxGroupInput("qs_trophic", "Quartale:", 
-                                  choices = c("Q1" = 1, "Q4" = 4), selected = 1),
-               helpText("Hinweis: In diesem Tab werden die Zusammenhänge zwischen Kondition, Bestandsdichte und Hydrographie untersucht.")
+             # --- UNTERSEITE 2: REGIONALE ANALYSE ---
+             tabPanel("Regionale Analyse",
+                      sidebarLayout(
+                        sidebarPanel(width = 3,
+                                     h4("Einstellungen", class="main-header"),
+                                     selectInput("plot_type_regional", "Darstellungsform:", 
+                                                 choices = c("Trendlinie" = "line", "Boxplots" = "box")),
+                                     hr(),
+                                     checkboxGroupInput("regions_exp", "Regionen wählen:", 
+                                                        choices = region_levels, selected = region_levels[3:5]), 
+                                     hr(),
+                                     checkboxGroupInput("qs_exp", "Quartale:", 
+                                                        choices = c("Q1 (Frühjahr)" = 1, "Q4 (Herbst)" = 4), selected = c(1, 4)),
+                                     checkboxGroupInput("groups_exp", "Biogruppen:", 
+                                                        choices = c("Mature Females" = "Female_Mature", 
+                                                                    "Males & Juveniles" = "Males_Juveniles_Other"), 
+                                                        selected = c("Female_Mature", "Males_Juveniles_Other")),
+                                     hr(),
+                                     p("Data Source:", style="font-weight: bold; margin-bottom: 2px; font-size: 0.85em;"),
+                                     p(
+                                       "ICES Database of Trawl Surveys (",
+                                       tags$a(href = "https://www.ices.dk/data/data-portals/Pages/DATRAS.aspx", 
+                                              "DATRAS", target = "_blank", style = "color: #3498db; text-decoration: underline;"),
+                                       "), BITS Survey.", 
+                                       style="font-size: 0.75em; color: #7f8c8d;")
+                        ),
+                        mainPanel(width = 9, 
+                                  uiOutput("stats_regional_bar"),
+                                  tabsetPanel(type = "tabs",
+                                              tabPanel(title = "Grafik", icon = icon("chart-line"),
+                                                       br(), div(class="well", plotOutput("plot_regional", height = "750px"))),
+                                              tabPanel(title = "Statistik-Tabelle", icon = icon("table"),
+                                                       br(), div(class="well", h4("Detaillierte Regressionsparameter"), DT::DTOutput("table_regional_stats")))
+                                  )
+                        )
+                      )
              ),
-             mainPanel(
-               width = 9,
-               div(class="well",
-                   conditionalPanel(
-                     condition = "input.trophic_mode == 'density'",
-                     fluidRow(
-                       column(6, plotOutput("plot_plaice_density", height = "450px")),
-                       column(6, plotOutput("plot_cod_density", height = "450px"))
-                     )
-                   ),
-                   conditionalPanel(
-                     condition = "input.trophic_mode == 'env'",
-                     plotOutput("plot_env_corr", height = "500px"),
-                     hr(),
-                     plotOutput("plot_env_map", height = "400px")
-                   )
-               )
+             
+             # --- UNTERSEITE 3: UMWELT- & BIOPARAMETER ---
+             tabPanel("Umwelt- & Bioparameter",
+                      sidebarLayout(
+                        sidebarPanel(width = 3,
+                                     h4("Einstellungen", class="main-header"),
+                                     radioButtons("env_view", "Modell auswählen:", 
+                                                  choices = c("Korrelations-Matrix" = "corr", 
+                                                              "GAM-Modell" = "gam")),
+                                     hr(),
+                                     checkboxGroupInput("gam_variables", "Parameter auswählen:", 
+                                                        choices = c("Bodentemperatur" = "temp_bottom", 
+                                                                    "Salinität" = "sal_bottom", 
+                                                                    "Wassertiefe" = "depth",
+                                                                    "Schollendichte (log)" = "log_cpue_plaice",
+                                                                    "Dorschdichte (log)" = "log_cpue_cod"), 
+                                                        selected = c("temp_bottom", "sal_bottom","log_cpue_plaice","log_cpue_cod")),
+                                     hr(),
+                                     p("Data Source:", style="font-weight: bold; margin-bottom: 2px; font-size: 0.85em;"),
+                                     p(
+                                       "ICES Database of Trawl Surveys (",
+                                       tags$a(href = "https://www.ices.dk/data/data-portals/Pages/DATRAS.aspx", 
+                                              "DATRAS", target = "_blank", style = "color: #3498db; text-decoration: underline;"),
+                                       "), BITS Survey.", 
+                                       style="font-size: 0.75em; color: #7f8c8d;"),
+                        ), 
+                        mainPanel(width = 9,
+                                  uiOutput("stats_env_info"), 
+                                  
+                                  # Tab-System für Ergebnisse
+                                  tabsetPanel(
+                                    id = "env_results_tabs",
+                                    type = "pills",
+                                    
+                                    # TAB 1: Grafik
+                                    tabPanel("Visualisierung", icon = icon("chart-area"),
+                                             br(),
+                                             conditionalPanel(
+                                               condition = "input.env_view == 'corr'",
+                                               div(class="well", plotOutput("plot_corr_matrix", height = "600px"))
+                                             ),
+                                             conditionalPanel(
+                                               condition = "input.env_view == 'gam'",
+                                               div(class="well", plotOutput("plot_gam_effects", height = "650px"))
+                                             )
+                                    ),
+                                    
+                                    # TAB 2: Statistik-Details
+                                    tabPanel("Modell-Details", icon = icon("microscope"),
+                                             br(),
+                                             conditionalPanel(
+                                               condition = "input.env_view == 'gam'",
+                                               div(class="well",
+                                                   h4("Statistische Modellparameter (GAM)"),
+                                                   DT::DTOutput("table_gam_results"),
+                                                   hr(),
+                                                   tags$small(
+                                                     p(strong("Erklärung der Parameter:")),
+                                                     tags$ul(
+                                                       tags$li(strong("edf (effective degrees of freedom):"), "1 = linear, >1 = nicht-linear/kurvig."),
+                                                       tags$li(strong("p-Wert:"), "Signifikanz des jeweiligen Umweltfaktors.")
+                                                     )
+                                                   )
+                                               )
+                                             ),
+                                             conditionalPanel(
+                                               condition = "input.env_view == 'corr'",
+                                               div(class="well", p("Koeffizienten siehe 'Visualisierung'."))
+                                             )
+                                    ) 
+                                  ) 
+                        ) 
+                      ) 
              )
+  ),
+  
+  # --- TAB 3: DOKUMENTATION ---
+  tabPanel("Dokumentation", icon = icon("book"),
+           fluidPage(
+             column(12, tags$iframe(src = "Dokumentation.html", style = "width: 100%; height: 85vh; border: none;"))
            )
   ),
   
-  # --- TAB 4: DOKUMENTATION ---
-  tabPanel("Dokumentation",
-           fluidPage(
-             column(8, offset = 2, div(class="well",
-                                       h3("Methodik & Datengrundlage", class="main-header"),
-                                       h4("Fulton's Konditionsfaktor (K)"),
-                                       p("Der Konditionsfaktor wird berechnet als:"),
-                                       withMathJax("$$K = 100 \\cdot \\frac{W}{L^3}$$"),
-                                       p("wobei W das Gewicht in Gramm und L die Länge in Zentimetern ist."),
-                                       hr(),
-                                       h4("Datenquelle"),
-                                       p("Die Daten stammen aus dem ICES DATRAS Portal (BITS Survey). Der Zeitraum umfasst 1994 bis heute.")
-             ))
-           )
-  ),
-  
-  # --- TAB 5: LITERATUR ---
-  tabPanel("Literatur",
-           fluidPage(
-             column(8, offset = 2, div(class="well",
-                                       h3("Referenzen", class="main-header"),
-                                       tags$ul(
-                                         tags$li("ICES. (2023). Baltic International Trawl Survey (BITS) Manual."),
-                                         tags$li("Fulton, T. W. (1904). The Rate of Growth of Fishes."),
-                                         tags$li("R Core Team (2026). R: A language and environment for statistical computing.")
-                                       )
-       ))
-    )
+  # --- FOOTER ---
+  footer = tags$footer(
+    style = "position: fixed; bottom: 0; width: 100%; height: 20px; background: #f8f9fa; font-size: 10px; border-top: 1px solid #e7e7e7; display: flex; align-items: center; justify-content: center; z-index: 1000;",
+    div(HTML("&copy; 2026 Flatfish Lab &bull; Marine Ecology Data Science &bull; <strong>Version 0.9.2-beta</strong>"))
   )
 )
 
@@ -220,7 +371,7 @@ server <- function(input, output) {
   
   # --- 1. DASHBOARD LOGIK ---
   filtered_fish <- reactive({
-    CA_meta %>% 
+    data_ind %>% 
       filter(Year == input$year_dash,
              Quarter %in% input$qs_dash,
              BioGroup %in% input$groups_dash)
@@ -236,12 +387,12 @@ server <- function(input, output) {
     format(nrow(filtered_fish()), big.mark = ".")
   })
   
-  # Exakte Tabelle (Einzelfisch-Basis) mit Styling
+  # Tabelle (Einzelfisch-Basis) mit Styling
   output$stats_table_detailed <- renderTable({
     df <- filtered_fish()
     validate(need(nrow(df) > 0, "Keine Daten."))
     
-    # Helfer-Funktion für schicke Überschriften
+    # Helfer-Funktion für Überschriften
     style_header <- function(text) {
       paste0("<b style='color: #e74c3c; text-decoration: underline;'>", text, "</b>")
     }
@@ -273,26 +424,26 @@ server <- function(input, output) {
   }, 
   digits = 3, 
   na = "", 
-  sanitize.text.function = function(x) x, # WICHTIG: Erlaubt HTML in der Tabelle
+  sanitize.text.function = function(x) x, # Erlaubt HTML in der Tabelle
   include.rownames = FALSE,
   width = "100%")
   
-  # Karte im Clean Style
+  # Karte
   output$ggplot_map <- renderPlot({
-    plot_data <- map_data %>% 
+    plot_data <- data_haul %>% 
       filter(Year == input$year_dash,
              Quarter %in% input$qs_dash,
              BioGroup %in% input$groups_dash)
     
     ggplot() +
       # ICES Geometrie
-      geom_sf(data = ICES_light, fill = "grey90", color = "grey40", linewidth = 0.3) +
+      geom_sf(data = ices_shape, fill = "grey90", color = "grey40", linewidth = 0.3) +
       # Datenpunkte
       geom_point(data = plot_data,
                  aes(x = HaulLong, y = HaulLat, color = median_K),
                  size = 2, alpha = 0.8) +
       # SD-Label (dezent im Hintergrund)
-      geom_sf_label(data = ICES_light, aes(label = SubDivisio), 
+      geom_sf_label(data = ices_shape, aes(label = SubDivisio), 
                     size = 3, alpha = 0.4, nudge_x = -0.1) +
       # Farbskala & Legende
       scale_color_viridis_c(option = "magma", direction = -1, name = "Median Condition (K)") +
@@ -323,12 +474,12 @@ server <- function(input, output) {
       
   })
  
-  # --- 2. LOGIK FÜR EXPLORATIVE STATISTIK ---
-  # --- EXPLORATIVE STATISTIK: KENNZAHLEN ---
   
-  # Zentraler Filter für den Overall-Tab
+  # --- 2. ANALYSE LOGIK: ZEITLICHE TRENDS ---
+  # 1. Reaktiver Filter
   df_overall <- reactive({
-    CA_meta %>% filter(
+    validate(need(input$year_range_overall, "Lade Zeitraum..."))
+    data_ind %>% filter(
       Year >= input$year_range_overall[1], 
       Year <= input$year_range_overall[2],
       Quarter %in% input$qs_overall, 
@@ -336,286 +487,371 @@ server <- function(input, output) {
     )
   })
   
+  # 2. KPI-Leiste
   output$stats_overall_bar <- renderUI({
-    df <- CA_meta %>% filter(
-      Year >= input$year_range_overall[1], 
-      Year <= input$year_range_overall[2],
-      Quarter %in% input$qs_overall, 
-      BioGroup %in% input$groups_overall
-    )
+    df <- df_overall()
+    if(nrow(df) < 10) return(div(class="well", "Nicht genügend Daten."))
     
-    if(nrow(df) < 5) return(div(class="well", "Nicht genügend Daten für Statistik."))
+    sel_min <- input$year_range_overall[1] 
+    sel_max <- input$year_range_overall[2]
     
-    # 1. Modell & Kennzahlen
-    fit <- lm(K_Fulton ~ Year, data = df)
-    summary_fit <- summary(fit)
-    p_val <- summary_fit$coefficients[2,4]
-    r2 <- summary_fit$r.squared
+    # PRÜFUNG: Sind alle Quartale und alle Gruppen ausgewählt?
+    all_quarters <- length(input$qs_overall) == 2
+    all_groups   <- length(input$groups_overall) == 2
     
-    # 2. Rückgang
-    y_start <- min(df$Year); y_end <- max(df$Year)
-    k_start <- median(df$K_Fulton[df$Year == y_start], na.rm = TRUE)
-    k_end   <- median(df$K_Fulton[df$Year == y_end], na.rm = TRUE)
-    percent_decline <- round(((k_end - k_start) / k_start) * 100, 1)
-    
-    # 3. p-Wert Formatierung
-    p_text <- if(p_val < 0.001) {
-      "Hoch signifikant (p < 0,001)"
-    } else if(p_val < 0.01) {
-      "Sehr signifikant (p < 0,01)"
-    } else if(p_val < 0.05) {
-      paste0("Signifikant (p = ", round(p_val, 3), ")")
+    if (all_quarters && all_groups) {
+      # --- SONDERFALL: GLOBALER BERICHTS-MODUS ---
+      # Ein einziges Modell über alle Daten (wie im Bericht)
+      global_mod <- lm(K_Fulton ~ Year, data = df)
+      
+      k_pred_start <- predict(global_mod, newdata = data.frame(Year = sel_min))
+      k_pred_end   <- predict(global_mod, newdata = data.frame(Year = sel_max))
+      
+      final_decline <- round(((k_pred_end - k_pred_start) / k_pred_start) * 100, 1)
+      
+      # Statistiken für die weiteren Boxen
+      summary_fit <- summary(global_mod)
+      r2    <- summary_fit$r.squared
+      p_val <- summary_fit$coefficients[2,4]
+      kpi_label <- "Globaler Modell-Trend"
+      
     } else {
-      paste0("Nicht signifikant (p = ", round(p_val, 2), ")")
+      # --- STANDARD: GRUPPEN-DURCHSCHNITT ---
+      summary_stats <- df %>%
+        group_by(BioGroup, Quarter) %>%
+        summarise(
+          fit = list(lm(K_Fulton ~ Year)),
+          k_pred_start = predict(fit[[1]], newdata = data.frame(Year = sel_min)),
+          k_pred_end   = predict(fit[[1]], newdata = data.frame(Year = sel_max)),
+          .groups = "drop"
+        ) %>%
+        mutate(decline_pct = ((k_pred_end - k_pred_start) / k_pred_start) * 100)
+      
+      final_decline <- round(mean(summary_stats$decline_pct, na.rm = TRUE), 1)
+      
+      # Für R2/p-Wert das globale Modell des Filters
+      global_fit  <- summary(lm(K_Fulton ~ Year, data = df))
+      r2    <- global_fit$r.squared
+      p_val <- global_fit$coefficients[2,4]
+      kpi_label <- "Ø Modell-Trend"
     }
     
-    div(class="well", style="padding: 15px; margin-bottom: 10px; border-left: 5px solid #3498db;",
+    # UI Logik für Farbe und Text
+    p_text <- if(p_val < 0.001) "Hoch signifikant" else if(p_val < 0.05) "Signifikant" else "Nicht signifikant"
+    trend_color <- if(final_decline <= 0) "#e74c3c" else "#27ae60"
+    
+    div(class="well", style="padding: 15px; border-left: 5px solid #3498db;",
         fluidRow(
-          # Rückgang
           column(3, div(class="kpi-box", 
-                        div(class="kpi-title", "Gesamt-Rückgang"), 
-                        div(class="kpi-value", style="color:#c0392b; font-weight: bold;", 
-                            paste0(percent_decline, " %")))),
-          
-          # p-Wert
-          column(3, div(class="kpi-box", 
-                        div(class="kpi-title", "Signifikanz"), 
-                        div(class="kpi-value", style="font-size: 1.05em; padding-top:8px;", p_text))),
-          
-          # R^2 als Zahl
-          column(3, div(class="kpi-box", 
-                        div(class="kpi-title", "Modellgüte (R²)"), 
-                        div(class="kpi-value", style="font-size: 1.1em; padding-top:8px;", 
-                            round(r2, 3)))),
-          
-          # n
-          column(3, div(class="kpi-box", 
-                        div(class="kpi-title", "Datenbasis (n)"), 
-                        div(class="kpi-value", style="color:#7f8c8d;", format(nrow(df), big.mark="."))))
-        )
-    )
+                        div(class="kpi-title", kpi_label), 
+                        div(class="kpi-value", style=paste0("color:", trend_color), paste0(final_decline, "%")))),
+          column(3, div(class="kpi-box", div(class="kpi-title", "Signifikanz"), div(class="kpi-value", p_text))),
+          column(3, div(class="kpi-box", div(class="kpi-title", "Modellgüte (R²)"), div(class="kpi-value", round(r2, 2)))),
+          column(3, div(class="kpi-box", div(class="kpi-title", "Individuen n"), div(class="kpi-value", nrow(df))))
+        ))
   })
   
-  output$stats_regional_bar <- renderUI({
-    df <- CA_meta %>% filter(Region %in% input$regions_exp, Quarter %in% input$qs_exp, BioGroup %in% input$groups_exp)
-    if(nrow(df) < 10) return(NULL)
-    
-    worst <- df %>% group_by(Region) %>% summarise(slope = coef(lm(K_Fulton ~ Year))[2]) %>% arrange(slope) %>% slice(1)
-    
-    div(class="well", style="padding: 10px; background-color: #fcf8e3 !important;",
-        icon("info-circle"), paste(" Kritischster Trend aktuell in Region:", worst$Region))
-  })
-  
-  # --- EXPLORATIVE STATISTIK: PLOTS ---
-  
+  # 3. Plot
   output$plot_overall <- renderPlot({
-    df <- df_overall() # Nutzt den reaktiven Filter von oben
-    validate(need(nrow(df) > 0, "Keine Daten."))
+    df <- df_overall()
+    validate(need(nrow(df) > 0, "Keine Daten für diese Auswahl."))
     
-    # --- LOGIK-WEICHE BASIEREND AUF DROP-DOWN ---
-    if (input$plot_type_exp == "line") {
-    
-    # Statistik pro Feld berechnen
-    y_start <- min(df$Year); y_end <- max(df$Year)
-    k_start <- median(df$K_Fulton[df$Year == y_start], na.rm = TRUE)
-    k_end   <- median(df$K_Fulton[df$Year == y_end], na.rm = TRUE)
-    percent_decline <- round(((k_end - k_start) / k_start) * 100, 1)
-    
-    stat_labels <- df %>%
-      group_by(BioGroup, Quarter) %>%
-      do(mod = lm(K_Fulton ~ Year, data = .)) %>%
-      mutate(
-        r2 = round(summary(mod)$r.squared, 3),
-        p_val = summary(mod)$coefficients[2,4],
-        # Schicke Formatierung des p-Wertes
-        p_label = if_else(p_val < 0.001, "p < 0.001", paste0("p = ", round(p_val, 3))),
-        label = paste0("R² = ", r2, "\n", p_label)
-      )
-    
-    #Plot: Overall Trend
-    ggplot(df, aes(x = Year, y = K_Fulton, color = BioGroup)) +
-      stat_summary(fun = median, geom = "line", linewidth = 1.2) +
-      geom_smooth(method = "lm", color = "black", linetype = "dashed", linewidth = 0.6, se = FALSE) +
+    if (input$plot_type_overall == "line") {
       
-      # Hier kommen die Labels in die obere linke Ecke (x = -Inf, y = Inf)
-      geom_text(data = stat_labels, 
-                aes(x = -Inf, y = Inf, label = label),
-                hjust = -0.1, vjust = 1.2, 
-                inherit.aes = FALSE, 
-                size = 4.5, 
-                fontface = "bold",
-                color = "grey20") +
+      # Berechnung der Labels für die Facets
+      stat_labels <- df %>%
+        group_by(BioGroup, Quarter) %>%
+        summarise(
+          r2 = round(summary(lm(K_Fulton ~ Year))$r.squared, 2),
+          p_val = summary(lm(K_Fulton ~ Year))$coefficients[2,4],
+          .groups = 'drop'
+        ) %>%
+        mutate(
+          p_label = if_else(p_val < 0.001, "p < 0.001", paste0("p = ", round(p_val, 3))),
+          label = paste0("R² = ", r2, "\n", p_label)
+        )
       
-      facet_grid(BioGroup ~ Quarter, labeller = labeller(
-        Quarter = c(`1` = "Q1 (Frühjahr)", `4` = "Q4 (Herbst)"),
-        BioGroup = c("Female_Mature" = "Females", "Males_Juveniles_Other" = "Males/Juv.")
-      )) +
-      scale_color_brewer(palette = "Set1") +
-      # Styling
-      theme_bw(base_size = 14) +
-      theme(
-        legend.position = "bottom",
-        strip.background = element_rect(fill = "grey98"),
-        strip.text = element_text(face = "bold"),
-        panel.grid.minor = element_blank(),
-        plot.title = element_text(face = "bold", size = 16),
-        plot.subtitle = element_text(color = "grey30"),
-        plot.caption = element_text(size = 9, color = "grey30", face = "italic")
-      ) +
-        labs(
-        title = "Detaillierte Trend-Statistik nach BioGruppen",
-        subtitle = "Lineare Regression pro Quartal und Biogruppe",
-        caption = "Source: ICES DATRAS Database (BITS Survey)",
-        y = expression(bold("Median Condition (K)")),
-        x = "Jahr"
-      )
-    
-    } else if (input$plot_type_exp == "box") {
-      
-      # --- NEUER BOXPLOT MODUS ---
-      ggplot(df, aes(x = factor(Year), y = K_Fulton, fill = BioGroup)) +
-        geom_boxplot(outlier.alpha = 0.2, notch = TRUE) +
+      ggplot(df, aes(x = Year, y = K_Fulton, color = BioGroup)) +
+        stat_summary(fun = median, geom = "line", linewidth = 1.2) +
+        geom_smooth(method = "lm", color = "black", linetype = "dashed", linewidth = 0.6, se = FALSE) +
+        geom_text(data = stat_labels, 
+                  aes(x = -Inf, y = Inf, label = label),
+                  hjust = -0.1, vjust = 1.2, inherit.aes = FALSE, 
+                  size = 4.5, fontface = "bold", color = "grey20") +
         facet_grid(BioGroup ~ Quarter, labeller = labeller(
           Quarter = c(`1` = "Q1 (Frühjahr)", `4` = "Q4 (Herbst)"),
           BioGroup = c("Female_Mature" = "Females", "Males_Juveniles_Other" = "Males/Juv.")
         )) +
-        scale_fill_brewer(palette = "Set1") +
+        scale_color_brewer(palette = "Set1") +
         theme_bw(base_size = 14) +
-        theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1)) +
-        labs(title = "Varianz der Kondition (Boxplots)", x = "Jahr", y = "Condition (K)")
+        theme(legend.position = "bottom", strip.text = element_text(face = "bold")) +
+        labs(title = "Detaillierte Trend-Statistik", y = "Median Kondition (K)", x = "Jahr")
       
-    } else if (input$plot_type_exp == "lw") {
-      
-      # --- Platzhalter MODUS ---
-   
+    } else {
+      # PLATZHALTER FÜR BOXPLOTS
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = "Boxplots: Coming Soon\n\nDiese Funktion wird derzeit überarbeitet.",
+                 size = 6, fontface = "italic", color = "#7f8c8d") +
+        theme_void() +
+        theme(
+          plot.background = element_rect(fill = "#fdfdfd", color = "#e3e6f0"),
+          panel.border = element_blank()
+        )
     }
   })
-    
-    
-
   
+  # --- 3. ANALYSE LOGIK: REGIONALE TRENDS ---
+  
+  # Reaktiver Filter für Regionen-Tab
+  df_regional <- reactive({
+    validate(need(input$regions_exp, "Bitte wählen Sie mindestens eine Region aus."))
+    data_ind %>% filter(
+      Region %in% input$regions_exp, 
+      Quarter %in% input$qs_exp, 
+      BioGroup %in% input$groups_exp,
+      Year >= 1994
+    )
+  })
+  
+  # Regionaler Plot
   output$plot_regional <- renderPlot({
-    # 1. Filterung
-    df <- CA_meta %>% 
-      filter(Region %in% input$regions_exp, 
-             Quarter %in% input$qs_exp, 
-             BioGroup %in% input$groups_exp, 
-             Year >= 1994)
-    
+    df <- df_regional()
     validate(need(nrow(df) > 10, "Nicht genügend Daten für die regionale Statistik."))
     
-    # 2. Statistik-Labels berechnen (analog zum Overall Design)
+    # Statistik-Labels für Regionen berechnen
     stat_labels_reg <- df %>%
       group_by(Region, BioGroup) %>%
-      do(mod = lm(K_Fulton ~ Year, data = .)) %>%
+      summarise(
+        r2 = round(summary(lm(K_Fulton ~ Year))$r.squared, 3),
+        p_val = summary(lm(K_Fulton ~ Year))$coefficients[2,4],
+        .groups = 'drop'
+      ) %>%
       mutate(
-        r2 = round(summary(mod)$r.squared, 3),
-        p_val = summary(mod)$coefficients[2,4],
-        # Gleiche p-Wert Logik wie im Overall Tab
+        group_label = if_else(BioGroup == "Female_Mature", "Mature Females", "Males/Juv."),
         p_label = if_else(p_val < 0.001, "p < 0.001", paste0("p = ", round(p_val, 3))),
-        group_label = if_else(BioGroup == "Female_Mature", "Weibchen", "Män./Juv."),
-        label_text = paste0(group_label, ": R² = ", r2, " | ", p_label)
+        label_text = paste0(group_label, ": R²=", r2, " | ", p_label)
       ) %>%
       group_by(Region) %>%
       summarise(final_label = paste(label_text, collapse = "\n"))
     
-    # 3. Plotting: Fokus auf Regression (Linie fett, Daten dezent)
-    ggplot(df, aes(x = Year, y = K_Fulton, color = BioGroup, fill = BioGroup)) +
-      
-      # 1. Datenpunkte (Mediane) dezent in den Hintergrund
-      stat_summary(fun = median, geom = "point", size = 2, alpha = 0.4) +
-      
-      # 2. Regression Fett im Vordergrund (ohne SE für mehr Klarheit)
-      # 'color = BioGroup' sorgt dafür, dass die Linien Rot/Blau sind (Set1)
-      geom_smooth(method = "lm", linewidth = 1.5, se = FALSE) + 
-      
-      # 3. Statistik-Labels (Bleiben im Design identisch zum Overall Trend)
-      geom_text(data = stat_labels_reg, 
-                aes(x = -Inf, y = Inf, label = final_label),
-                hjust = -0.05, vjust = 1.2, 
-                inherit.aes = FALSE, 
-                size = 4, 
-                fontface = "bold", 
-                color = "grey20", 
-                lineheight = 1.1) +
-      
-      # Layout & Faceting
-      facet_wrap(~Region, ncol = 3) + 
-      coord_cartesian(ylim = c(0.75, 1.25)) +
-      
-      # Farben: Set1 liefert in der Regel Blau für die erste und Rot für die zweite Gruppe
-      scale_color_brewer(palette = "Set1", labels = c("Female_Mature" = "Females", "Males_Juveniles_Other" = "Males/Juv.")) +
-      scale_fill_brewer(palette = "Set1", labels = c("Female_Mature" = "Females", "Males_Juveniles_Other" = "Males/Juv.")) +
-      
-      # Styling
-      theme_bw(base_size = 14) +
-      theme(
-        legend.position = "bottom",
-        strip.background = element_rect(fill = "grey98"),
-        strip.text = element_text(face = "bold"),
-        panel.grid.minor = element_blank(),
-        plot.title = element_text(face = "bold", size = 16),
-        plot.subtitle = element_text(color = "grey30"),
-        plot.caption = element_text(size = 9, color = "grey30", face = "italic")
-      ) +
-      labs(
-        title = "Regionale Trend-Statistik nach BioGruppen",
-        subtitle = "Lineare Regression pro Subdivision (1994 - 2024)",
-        caption = "Source: ICES DATRAS Database (BITS Survey)",
-        x = "Jahr",
-        y = expression(bold("Median Condition (K)")),
-        color = "BioGroup:", fill = "BioGroup:"
+    if (input$plot_type_regional == "line") {
+      ggplot(df, aes(x = Year, y = K_Fulton, color = BioGroup)) +
+        stat_summary(fun = median, geom = "point", size = 2, alpha = 0.4) +
+        geom_smooth(method = "lm", linewidth = 1.2, se = FALSE) + 
+        geom_text(data = stat_labels_reg, 
+                  aes(x = -Inf, y = -Inf, label = final_label),
+                  hjust = -0.05, vjust = -0.5, 
+                  inherit.aes = FALSE, 
+                  size = 3.5, fontface = "bold", color = "grey20") +
+        facet_wrap(~Region, ncol = 3) + 
+        scale_color_brewer(palette = "Set1", 
+                           labels = c("Female_Mature" = "Mature Females", 
+                                      "Males_Juveniles_Other" = "Males/Juv.")) +
+        theme_bw(base_size = 14) +
+        theme(legend.position = "bottom", strip.text = element_text(face = "bold")) +
+        labs(title = "Regionale Trends im Vergleich", 
+             x = "Jahr", 
+             y = "Median Kondition (K)",
+             color = "Biogruppe")
+    } else {
+      # PLATZHALTER FÜR BOXPLOTS
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = "Boxplots: Coming Soon\n\nDiese Funktion wird derzeit überarbeitet.",
+                 size = 6, fontface = "italic", color = "#7f8c8d") +
+        theme_void() +
+        theme(
+          plot.background = element_rect(fill = "#fdfdfd", color = "#e3e6f0"),
+          panel.border = element_blank()
+        )
+    }
+  })
+  # 4. Statistik-Tabelle
+  output$table_regional_stats <- renderDT({
+    df <- df_regional()
+    validate(need(nrow(df) > 0, "Nicht genügend Daten."))
+    
+    tab_data <- df %>%
+      group_by(Region, BioGroup) %>%
+      summarise(
+        n = n(),
+        mod = list(lm(K_Fulton ~ Year)),
+        slope = round(coef(mod[[1]])[2], 5),
+        r2 = round(summary(mod[[1]])$r.squared, 3),
+        p_val_raw = summary(mod[[1]])$coefficients[2,4],
+        k_pred_start = predict(mod[[1]], newdata = data.frame(Year = min(df$Year))),
+        k_pred_end   = predict(mod[[1]], newdata = data.frame(Year = max(df$Year))),
+        decline_pct = round(((k_pred_end - k_pred_start) / k_pred_start) * 100, 1),
+        k_max = round(max(aggregate(K_Fulton ~ Year, data = pick(everything()), median)$K_Fulton), 2),
+        k_min = round(min(aggregate(K_Fulton ~ Year, data = pick(everything()), median)$K_Fulton), 2),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        BioGroup = if_else(BioGroup == "Female_Mature", "Mature Females", "Males/Juv."),
+        p_val = if_else(p_val_raw < 0.001, "< 0.001", as.character(round(p_val_raw, 3)))
+      ) %>%
+      select(Region, BioGroup, n, slope, r2, p_val, decline_pct, k_max, k_min)
+
+    datatable(tab_data, 
+              colnames = c("Region", "Gruppe", "n", "Slope", "R²", "p-Wert", "% Rückg.", "Max K", "Min K"),
+              options = list(
+                pageLength = -1,  # -1 zeigt ALLE Zeilen an
+                dom = 't',        # Zeigt nur die Tabelle ('t'), keine Suche/Pagination-Buttons
+                order = list(list(6, 'asc')), 
+                autoWidth = TRUE
+              ),
+              selection = 'none',
+              rownames = FALSE) %>%
+      formatStyle(
+        'decline_pct',
+        backgroundColor = styleInterval(0, c('#d9534f', '#5cb85c')),
+        color = 'white',
+        fontWeight = 'bold'
       )
   })
   
-  # --- 3. LOGIK FÜR Trophik-Date ---
-  # Filter für Trophik-Daten
-  trophic_data <- reactive({
-    map_data %>% filter(Year == input$year_trophic, Quarter %in% input$qs_trophic)
+  # --- 4. UMWELT-LOGIK --------------------------------------------
+  
+  # 4.1 Reaktiver Datensatz für Umwelt
+  df_env_fixed <- reactive({
+    data_haul %>%
+      filter(!is.na(temp_bottom), !is.na(sal_bottom), !is.na(median_K)) %>% 
+      mutate(
+        log_cpue_plaice = log10(cpue_plaice + 1),
+        log_cpue_cod = log10(cpue_cod_large + 1)
+      )
   })
   
-  # Karte 1: Schollen-Dichte
-  output$plot_plaice_density <- renderPlot({
-    ggplot(trophic_data()) +
-      geom_sf(data = ICES_light, fill = "grey95", inherit.aes = FALSE) +
-      geom_point(aes(x = HaulLong, y = HaulLat, color = median_K, size = cpue_plaice), alpha = 0.7) +
-      scale_color_viridis_c(option = "magma", direction = -1, name = "Fulton-K") +
-      scale_size_continuous(name = "Schollen-Dichte") +
-      coord_sf(xlim = c(lon_min, lon_max), ylim = c(lat_min, lat_max), expand = FALSE) +
-      theme_minimal() + labs(title = "Kondition vs. Schollen-Dichte")
+  # 4.2 Korrelationsmatrix Plot
+  output$plot_corr_matrix <- renderPlot({
+    # Nutzt den fixierten Datensatz ohne Zeitfilter
+    dat_raw <- df_env_fixed()
+    
+    # Check, ob Daten da sind
+    validate(
+      need(nrow(dat_raw) > 10, "Nicht genügend Datenpunkte vorhanden.")
+    )
+    
+    # 1. Definition, welche Spalte korreliert werden soll
+    target_vars <- c("median_K", input$gam_variables)
+    
+    # 2. Daten auswählen und umbenennen für die Grafik
+    nice_names <- c(
+      "median_K"        = "Kondition (K)",
+      "temp_bottom"     = "Temp (°C)",
+      "sal_bottom"      = "Salz (PSU)",
+      "depth"           = "Tiefe (m)",
+      "log_cpue_plaice" = "Dichte Scholle (log)",
+      "log_cpue_cod"    = "Dichte Dorsch (log)"
+    )
+    
+    # Nur die Spalten wählen, die auch existieren und vom User gewählt wurden
+    dat_sel <- dat_raw %>%
+      select(all_of(target_vars)) %>%
+      drop_na() # Korrelation braucht vollständige Paare
+    
+    # Spaltennamen für den Plot übersetzen
+    colnames(dat_sel) <- nice_names[colnames(dat_sel)]
+    
+    # 3. Korrelation berechnen (Spearman)
+    cor_matrix <- cor(dat_sel, method = "spearman")
+    
+    # 4. Plotten
+    col_palette <- colorRampPalette(c("#B2182B", "#F7F7F7", "#2166AC"))(200)
+    
+    corrplot::corrplot(
+      cor_matrix, 
+      method = "color", 
+      type = "upper", 
+      addCoef.col = "black", 
+      number.cex = 0.9, 
+      tl.col = "black",
+      tl.srt = 45,    
+      col = col_palette, 
+      diag = FALSE, 
+      mar = c(1,1,1,1)
+    )
   })
   
-  # Karte 2: Dorsch-Dichte
-  output$plot_cod_density <- renderPlot({
-    ggplot(trophic_data()) +
-      geom_sf(data = ICES_light, fill = "grey95", inherit.aes = FALSE) +
-      geom_point(aes(x = HaulLong, y = HaulLat, color = median_K, size = cpue_cod_large), alpha = 0.7) +
-      scale_color_viridis_c(option = "magma", direction = -1, name = "Fulton-K") +
-      scale_size_continuous(name = "Dorsch-Dichte (Large)") +
-      coord_sf(xlim = c(lon_min, lon_max), ylim = c(lat_min, lat_max), expand = FALSE) +
-      theme_minimal() + labs(title = "Kondition vs. Dorsch-Dichte")
+  # 4.3 GAM Modellierung & Plot
+  output$plot_gam_effects <- renderPlot({
+    dat <- df_env_fixed()
+    vars <- input$gam_variables
+    
+    validate(
+      need(length(vars) > 0, "Bitte wählen Sie mindestens einen Parameter aus."),
+      need(nrow(dat) > 50, "Nicht genügend Daten vorhanden.")
+    )
+    
+    # 1. Schöne Namen definieren (wie in der Tabelle)
+    var_names <- c(
+      "temp_bottom"     = "Bodentemperatur (°C)",
+      "log_cpue_plaice" = "Schollendichte [log10(CPUE+1)]",
+      "sal_bottom"      = "Salinität (PSU)",
+      "log_cpue_cod"    = "Dorschdichte [log10(CPUE+1)]",
+      "depth"           = "Wassertiefe (m)"
+    )
+    
+    # 2. Modell berechnen 
+    formula_str <- paste("median_K ~ BioGroup +", paste0("s(", vars, ", k=10)", collapse = " + "))
+    model <- mgcv::gam(as.formula(formula_str), data = dat)
+    
+    # 3. Einzel-Plots extrahieren
+    # gratia::draw() gibt bei mehreren Termen eine Liste von ggplots zurück
+    raw_plots <- gratia::draw(model, parametric = FALSE)
+    
+    # 4. x-Achsen der Einzelplots dynamisch umbenennen
+    for(i in seq_along(vars)) {
+      current_var <- vars[i]
+      raw_plots[[i]] <- raw_plots[[i]] + 
+        labs(x = var_names[current_var], 
+             title = paste("Effekt:", var_names[current_var]))
+    }
+    
+    # 5. Zusammenführung mit Patchwork (& Styling)
+    raw_plots + 
+      plot_annotation(
+        title = "Partielle Effekte der Umweltparameter auf die Kondition (K)",
+        subtitle = "Modell basiert auf dem gesamten Zeitraum (Stationsbasis)",
+        caption = paste0("Basis: n = ", nrow(dat), " Stationen")
+      ) & 
+      theme_minimal(base_size = 12) &
+      geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha = 0.5)
   })
   
-  # Korrelations-Plot (Salzgehalt)
-  output$plot_env_corr <- renderPlot({
-    ggplot(trophic_data(), aes(x = sal_bottom, y = median_K)) +
-      geom_point(aes(color = temp_bottom, size = n_plaice_measured), alpha = 0.6) +
-      geom_smooth(method = "lm", color = "black", linetype = "dashed") +
-      scale_color_viridis_c(option = "plasma", name = "Temp (°C)") +
-      facet_wrap(~BioGroup) +
-      theme_bw() + labs(title = "Einfluss des Salzgehalts auf die Kondition", x = "Salzgehalt (PSU)", y = "Median Fulton-K")
+  # 4.4 GAM Ergebnistabelle
+  output$table_gam_results <- renderDT({
+    dat <- df_env_fixed()
+    vars <- input$gam_variables
+    validate(need(length(vars) > 0, ""))
+    
+    # Modell berechnen
+    formula_str <- paste("median_K ~ BioGroup +", paste0("s(", vars, ", k=10)", collapse = " + "))
+    model <- mgcv::gam(as.formula(formula_str), data = dat)
+    
+    # Namen für die Tabelle
+    var_names <- c(
+      "temp_bottom" = "Bodentemperatur",
+      "log_cpue_plaice" = "Schollendichte (log)",
+      "sal_bottom" = "Salzgehalt",
+      "log_cpue_cod" = "Dorschdichte (log)",
+      "depth" = "Wassertiefe"
+    )
+    
+    # Statistiken aufbereiten
+    gam_res <- broom::tidy(model) %>%
+      mutate(
+        term = str_remove_all(term, "s\\(|\\)"), # "s(temp_bottom)" -> "temp_bottom"
+        Einflussfaktor = var_names[term],
+        p.value = if_else(p.value < 0.001, "< 0.001 ***", as.character(round(p.value, 3))),
+        edf = round(edf, 2),
+        statistic = round(statistic, 2)
+      ) %>%
+      select(Einflussfaktor, `Effekt-Stärke (edf)` = edf, `F-Wert` = statistic, `p-Wert` = p.value)
+    
+    datatable(gam_res, options = list(dom = 't', pageLength = -1), rownames = FALSE)
   })
-  
-  # Umwelt-Karte (Temperatur/Tiefe)
-  output$plot_env_map <- renderPlot({
-    ggplot(trophic_data()) +
-      geom_sf(data = ICES_light, fill = "grey95", color = "grey70", inherit.aes = FALSE) +
-      geom_point(aes(x = HaulLong, y = HaulLat, color = temp_bottom, size = depth), alpha = 0.7) +
-      scale_color_viridis_c(option = "viridis", name = "Boden-Temp (°C)") +
-      coord_sf(xlim = c(lon_min, lon_max), ylim = c(lat_min, lat_max), expand = FALSE) +
-      theme_minimal() + labs(title = "Hydrographische Bedingungen")
-  })
-  
   
 }
 
